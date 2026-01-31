@@ -148,6 +148,179 @@ def list_property_bookings(property_id: int, current_user: UserAuth = Depends(re
         raise HTTPException(status_code=500, detail=f"Internal server error (see server logs)\n{tb}")
 
 
+@router.get("/bookings/active", response_model=list[BookingRead])
+def list_owner_active_bookings(current_user: UserAuth = Depends(require_role("Owner")), session: Session = Depends(get_rental_session)):
+    try:
+        from .models import Customer, Owner, Room, Booking
+        cust = session.exec(select(Customer).where(Customer.user_id == current_user.user_id)).first()
+        if not cust:
+            raise HTTPException(status_code=404, detail="Customer profile not found in rental DB")
+        owner = session.exec(select(Owner).where(Owner.customer_id == cust.customer_id)).first()
+        if not owner:
+            raise HTTPException(status_code=403, detail="User is not an owner")
+
+        prop_ids = session.exec(select(Property.property_id).where(Property.owner_id == owner.owner_id)).all()
+        if not prop_ids:
+            return []
+        room_ids = session.exec(select(Room.room_id).where(Room.property_id.in_(prop_ids))).all()
+        if not room_ids:
+            return []
+
+        bookings = session.exec(select(Booking).where(Booking.room_id.in_(room_ids), Booking.booking_status == 'Active')).all()
+        results = []
+        for b in bookings:
+            room = session.get(Room, b.room_id)
+            customer = session.get(Customer, b.customer_id)
+            results.append(BookingRead(
+                booking_id=b.booking_id,
+                property_id=room.property_id if room else None,
+                room_id=b.room_id,
+                room_number=room.room_number if room else "",
+                customer_id=b.customer_id,
+                customer_name=customer.full_name if customer else None,
+                start_date=str(b.start_date) if getattr(b, 'start_date', None) else None,
+                end_date=str(b.end_date) if getattr(b, 'end_date', None) else None,
+                booking_status=b.booking_status,
+            ))
+        return results
+    except HTTPException:
+        raise
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("list_owner_active_bookings failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Internal server error (see server logs)\n{tb}")
+
+
+@router.get("/bookings/completed", response_model=list[BookingRead])
+def list_owner_completed_bookings(current_user: UserAuth = Depends(require_role("Owner")), session: Session = Depends(get_rental_session)):
+    try:
+        from .models import Customer, Owner, Room, Booking
+        cust = session.exec(select(Customer).where(Customer.user_id == current_user.user_id)).first()
+        if not cust:
+            raise HTTPException(status_code=404, detail="Customer profile not found in rental DB")
+        owner = session.exec(select(Owner).where(Owner.customer_id == cust.customer_id)).first()
+        if not owner:
+            raise HTTPException(status_code=403, detail="User is not an owner")
+
+        prop_ids = session.exec(select(Property.property_id).where(Property.owner_id == owner.owner_id)).all()
+        if not prop_ids:
+            return []
+        room_ids = session.exec(select(Room.room_id).where(Room.property_id.in_(prop_ids))).all()
+        if not room_ids:
+            return []
+
+        bookings = session.exec(select(Booking).where(Booking.room_id.in_(room_ids), Booking.booking_status == 'Completed')).all()
+        results = []
+        for b in bookings:
+            room = session.get(Room, b.room_id)
+            customer = session.get(Customer, b.customer_id)
+            results.append(BookingRead(
+                booking_id=b.booking_id,
+                property_id=room.property_id if room else None,
+                room_id=b.room_id,
+                room_number=room.room_number if room else "",
+                customer_id=b.customer_id,
+                customer_name=customer.full_name if customer else None,
+                start_date=str(b.start_date) if getattr(b, 'start_date', None) else None,
+                end_date=str(b.end_date) if getattr(b, 'end_date', None) else None,
+                booking_status=b.booking_status,
+            ))
+        return results
+    except HTTPException:
+        raise
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("list_owner_completed_bookings failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Internal server error (see server logs)\n{tb}")
+
+
+@router.get("/properties/{property_id}/bookings/active", response_model=list[BookingRead])
+def list_property_active_bookings(property_id: int, current_user: UserAuth = Depends(require_role("Owner")), session: Session = Depends(get_rental_session)):
+    try:
+        from .models import Customer, Owner, Room, Booking
+        cust = session.exec(select(Customer).where(Customer.user_id == current_user.user_id)).first()
+        if not cust:
+            raise HTTPException(status_code=404, detail="Customer profile not found in rental DB")
+        owner = session.exec(select(Owner).where(Owner.customer_id == cust.customer_id)).first()
+        if not owner:
+            raise HTTPException(status_code=403, detail="User is not an owner")
+
+        prop = session.get(Property, property_id)
+        if not prop or prop.owner_id != owner.owner_id:
+            raise HTTPException(status_code=404, detail="Property not found for owner")
+
+        room_ids = session.exec(select(Room.room_id).where(Room.property_id == property_id)).all()
+        if not room_ids:
+            return []
+        bookings = session.exec(select(Booking).where(Booking.room_id.in_(room_ids), Booking.booking_status == 'Active')).all()
+        results = []
+        for b in bookings:
+            room = session.get(Room, b.room_id)
+            customer = session.get(Customer, b.customer_id)
+            results.append(BookingRead(
+                booking_id=b.booking_id,
+                property_id=property_id,
+                room_id=b.room_id,
+                room_number=room.room_number if room else "",
+                customer_id=b.customer_id,
+                customer_name=customer.full_name if customer else None,
+                start_date=str(b.start_date) if getattr(b, 'start_date', None) else None,
+                end_date=str(b.end_date) if getattr(b, 'end_date', None) else None,
+                booking_status=b.booking_status,
+            ))
+        return results
+    except HTTPException:
+        raise
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("list_property_active_bookings failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Internal server error (see server logs)\n{tb}")
+
+
+@router.get("/properties/{property_id}/bookings/completed", response_model=list[BookingRead])
+def list_property_completed_bookings(property_id: int, current_user: UserAuth = Depends(require_role("Owner")), session: Session = Depends(get_rental_session)):
+    try:
+        from .models import Customer, Owner, Room, Booking
+        cust = session.exec(select(Customer).where(Customer.user_id == current_user.user_id)).first()
+        if not cust:
+            raise HTTPException(status_code=404, detail="Customer profile not found in rental DB")
+        owner = session.exec(select(Owner).where(Owner.customer_id == cust.customer_id)).first()
+        if not owner:
+            raise HTTPException(status_code=403, detail="User is not an owner")
+
+        prop = session.get(Property, property_id)
+        if not prop or prop.owner_id != owner.owner_id:
+            raise HTTPException(status_code=404, detail="Property not found for owner")
+
+        room_ids = session.exec(select(Room.room_id).where(Room.property_id == property_id)).all()
+        if not room_ids:
+            return []
+        bookings = session.exec(select(Booking).where(Booking.room_id.in_(room_ids), Booking.booking_status == 'Completed')).all()
+        results = []
+        for b in bookings:
+            room = session.get(Room, b.room_id)
+            customer = session.get(Customer, b.customer_id)
+            results.append(BookingRead(
+                booking_id=b.booking_id,
+                property_id=property_id,
+                room_id=b.room_id,
+                room_number=room.room_number if room else "",
+                customer_id=b.customer_id,
+                customer_name=customer.full_name if customer else None,
+                start_date=str(b.start_date) if getattr(b, 'start_date', None) else None,
+                end_date=str(b.end_date) if getattr(b, 'end_date', None) else None,
+                booking_status=b.booking_status,
+            ))
+        return results
+    except HTTPException:
+        raise
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("list_property_completed_bookings failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Internal server error (see server logs)\n{tb}")
+    
+
+
 @router.get("/properties", response_model=list[PropertyRead])
 def list_my_properties(
     current_user: UserAuth = Depends(require_role("Owner")), session: Session = Depends(get_rental_session)

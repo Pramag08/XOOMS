@@ -127,6 +127,11 @@ CREATE TABLE room (
 );
 CREATE INDEX IF NOT EXISTS idx_room_property_active ON room(property_id) WHERE is_active = TRUE;
 
+-- Cached availability for quick reads (kept in sync by triggers below)
+ALTER TABLE room ADD COLUMN IF NOT EXISTS is_booked BOOLEAN NOT NULL DEFAULT FALSE;
+CREATE INDEX IF NOT EXISTS idx_room_property_is_booked ON room(property_id, is_booked);
+
+
 -- BOOKING now references customers.customer_id
 CREATE TABLE booking (
   booking_id BIGSERIAL PRIMARY KEY,
@@ -278,6 +283,49 @@ CREATE INDEX IF NOT EXISTS idx_booking_active_room ON booking(room_id) WHERE boo
 CREATE INDEX IF NOT EXISTS idx_booking_customer ON booking(customer_id);
 CREATE INDEX IF NOT EXISTS idx_review_property ON review(property_id);
 -- (unique constraint on customers.user_id creates an index automatically)
+
+-- ==========================================
+-- Room booking status maintenance
+-- ==========================================
+-- Recompute `room.is_booked` for a single room based on active overlapping bookings
+CREATE OR REPLACE FUNCTION recompute_room_booked_status(target_room_id bigint)
+RETURNS VOID AS $$
+DECLARE
+  cnt int;
+BEGIN
+  SELECT count(1) INTO cnt
+  FROM booking b
+  WHERE b.room_id = target_room_id
+    AND b.booking_status = 'Active'
+    AND daterange(b.start_date, b.end_date, '[)') && daterange(CURRENT_DATE, CURRENT_DATE + 1, '[)');
+
+  UPDATE room SET is_booked = (cnt > 0) WHERE room_id = target_room_id;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger wrapper to call recompute using advisory lock to avoid race conditions
+CREATE OR REPLACE FUNCTION trg_booking_upsert_notify()
+RETURNS TRIGGER AS $$
+BEGIN
+  PERFORM pg_advisory_xact_lock(COALESCE(NEW.room_id, OLD.room_id));
+  IF (TG_OP = 'DELETE') THEN
+    PERFORM recompute_room_booked_status(OLD.room_id);
+    RETURN OLD;
+  ELSE
+    PERFORM recompute_room_booked_status(NEW.room_id);
+    RETURN NEW;
+  END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Attach triggers to booking table
+DROP TRIGGER IF EXISTS trg_booking_after_ins ON booking;
+CREATE TRIGGER trg_booking_after_ins AFTER INSERT ON booking FOR EACH ROW EXECUTE FUNCTION trg_booking_upsert_notify();
+DROP TRIGGER IF EXISTS trg_booking_after_upd ON booking;
+CREATE TRIGGER trg_booking_after_upd AFTER UPDATE ON booking FOR EACH ROW EXECUTE FUNCTION trg_booking_upsert_notify();
+DROP TRIGGER IF EXISTS trg_booking_after_del ON booking;
+CREATE TRIGGER trg_booking_after_del AFTER DELETE ON booking FOR EACH ROW EXECUTE FUNCTION trg_booking_upsert_notify();
+
 
 -- ==========================================
 -- Notes
