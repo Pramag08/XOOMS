@@ -38,3 +38,22 @@ class Owner(SQLModel, table=True):
     owner_id: Optional[int] = Field(default=None, primary_key=True)
     customer_id: int
     verification_status: Optional[str] = None
+
+
+class Room(SQLModel, table=True):
+    __tablename__ = "room"
+    room_id: Optional[int] = Field(default=None, primary_key=True)
+    property_id: int
+    room_number: str
+    rent_per_month: float
+    is_active: bool = True
+
+
+class Booking(SQLModel, table=True):
+    __tablename__ = "booking"
+    booking_id: Optional[int] = Field(default=None, primary_key=True)
+    customer_id: int
+    room_id: int
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    booking_status: Optional[str] = None

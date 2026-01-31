@@ -37,3 +37,15 @@ class PropertyRead(BaseModel):
     google_maps_link: Optional[str] = None
     verification_status: Optional[str] = None
     average_rating: Optional[float] = None
+
+
+class BookingRead(BaseModel):
+    booking_id: int
+    property_id: int
+    room_id: int
+    room_number: str
+    customer_id: int
+    customer_name: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    booking_status: Optional[str] = None
