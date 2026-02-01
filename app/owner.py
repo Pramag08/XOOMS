@@ -11,6 +11,10 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/owner", tags=["owner"])
 
+# NOTE: transaction handling is explicit in these endpoints (using `session.begin()`
+# or `session.commit()`/`session.flush()` as needed). The prior `@transactional`
+# helper was removed intentionally to make transaction boundaries visible in code.
+
 
 @router.post("/properties", response_model=PropertyRead)
 def create_property(
