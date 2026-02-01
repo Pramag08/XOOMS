@@ -26,9 +26,18 @@ def get_current_user(token: str = Depends(oauth2_scheme), session: Session = Dep
 
 
 def require_role(required_role: str):
-    def role_dependency(current_user: UserAuth = Depends(get_current_user)):
+    def role_dependency(token: str = Depends(oauth2_scheme), current_user: UserAuth = Depends(get_current_user)):
+        # First ensure token decodes and claims the required role
+        try:
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        except Exception:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication credentials")
+
+        token_role = payload.get("role")
         user_role = getattr(current_user, "role", None)
-        if user_role != required_role:
+
+        # If either token role or DB role does not match required role, forbid access
+        if token_role != required_role or user_role != required_role:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Requires role: {required_role}",

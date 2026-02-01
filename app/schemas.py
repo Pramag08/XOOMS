@@ -31,6 +31,8 @@ class PropertyCreate(BaseModel):
     city: str
     address: str
     google_maps_link: Optional[str] = None
+    number_of_rooms: Optional[int] = 0
+    rent_per_month: float
 
 
 class PropertyRead(BaseModel):
@@ -44,6 +46,10 @@ class PropertyRead(BaseModel):
     google_maps_link: Optional[str] = None
     verification_status: Optional[str] = None
     average_rating: Optional[float] = None
+    is_full: Optional[bool] = False
+    rooms_available: Optional[int] = 0
+    next_available: Optional[str] = None
+    availability_text: Optional[str] = None
 
 
 class BookingRead(BaseModel):
@@ -56,3 +62,40 @@ class BookingRead(BaseModel):
     start_date: Optional[str] = None
     end_date: Optional[str] = None
     booking_status: Optional[str] = None
+
+
+class BookingCreate(BaseModel):
+    room_id: int
+    start_date: str
+    end_date: str
+
+
+class BookingUpdate(BaseModel):
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    booking_status: Optional[str] = None
+
+
+class RoomCreate(BaseModel):
+    room_number: Optional[str] = None
+    rent_per_month: Optional[float] = 0.0
+    is_active: Optional[bool] = True
+
+
+class RoomRead(BaseModel):
+    room_id: int
+    property_id: int
+    room_number: str
+    rent_per_month: float
+    is_active: bool
+
+
+class RoomAvailability(BaseModel):
+    room_id: int
+    property_id: int
+    room_number: str
+    rent_per_month: float
+    is_active: bool
+    is_booked: bool
+    next_available: Optional[str] = None
+    availability_text: Optional[str] = None
