@@ -5,8 +5,8 @@ from datetime import datetime, date
 
 from .db import get_rental_session
 from .deps import get_current_user
-from .models import Property, Room, Booking, Review
-from .schemas import PropertyRead, BookingCreate, BookingRead, RoomAvailability, ReviewCreate, ReviewRead
+from .models import Property, Room, Booking, Review, Customer
+from .schemas import PropertyRead, BookingCreate, BookingRead, RoomAvailability, ReviewCreate, ReviewRead, PropertyDetail
 from datetime import datetime
 from sqlalchemy.exc import IntegrityError, ProgrammingError
 from sqlalchemy import text
@@ -119,49 +119,56 @@ def list_property_rooms(property_id: int, session: Session = Depends(get_rental_
         results: List[RoomAvailability] = []
         for r in rooms:
             # find active bookings for this room
-            active_rows = session.exec(select(Booking.end_date).where(Booking.room_id == r.room_id, Booking.booking_status == 'Active')).all()
+            active_rows = session.exec(
+                select(Booking.end_date).where(
+                    Booking.room_id == r.room_id,
+                    Booking.booking_status == 'Active'
+                )
+            ).all()
             # active_rows is list of end_date values
             is_booked = len(active_rows) > 0
             next_available = None
             availability_text = "Available"
+
             if is_booked:
                 parsed_dates = []
                 for ed in active_rows:
-                    if not ed:
-                        continue
+                    # active_rows entries may be scalars or single-item tuples
+                    val = ed[0] if isinstance(ed, (list, tuple)) and len(ed) > 0 else ed
                     # accept datetime/date objects directly
-                    if isinstance(ed, datetime):
-                        parsed_dates.append(ed)
+                    if isinstance(val, datetime):
+                        parsed_dates.append(val)
                         continue
-                    if isinstance(ed, date):
-                        parsed_dates.append(datetime(ed.year, ed.month, ed.day))
+                    if isinstance(val, date):
+                        parsed_dates.append(datetime(val.year, val.month, val.day))
                         continue
                     # try parsing strings
-                    if isinstance(ed, str):
+                    if isinstance(val, str):
                         try:
-                            parsed_dates.append(datetime.fromisoformat(ed))
+                            parsed_dates.append(datetime.fromisoformat(val))
                             continue
                         except Exception:
                             pass
                         try:
-                            parsed_dates.append(datetime.strptime(ed, "%Y-%m-%d"))
+                            parsed_dates.append(datetime.strptime(val, "%Y-%m-%d"))
                             continue
                         except Exception:
                             pass
-                    # unknown type — skip
+
                 if parsed_dates:
                     earliest = min(parsed_dates)
                     next_available = earliest.date().isoformat()
                     availability_text = f"Booked till {next_available}"
                 else:
+                    next_available = None
                     availability_text = "Booked"
 
             results.append(RoomAvailability(
                 room_id=r.room_id,
                 property_id=r.property_id,
-                room_number=r.room_number,
-                rent_per_month=r.rent_per_month,
-                is_active=r.is_active,
+                room_number=getattr(r, 'room_number', ''),
+                rent_per_month=getattr(r, 'rent_per_month', 0.0),
+                is_active=getattr(r, 'is_active', True),
                 is_booked=is_booked,
                 next_available=next_available,
                 availability_text=availability_text,
@@ -340,4 +347,153 @@ def list_reviews_for_property(property_id: int, limit: int = 50, offset: int = 0
 
         tb = traceback.format_exc()
         logger.exception("list_reviews_for_property failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Internal server error (see server logs)\n{tb}")
+
+
+@router.get("/{property_id}", response_model=PropertyDetail)
+def get_property_detail(property_id: int, session: Session = Depends(get_rental_session)):
+    try:
+        prop = session.get(Property, property_id)
+        if not prop:
+            raise HTTPException(status_code=404, detail="Property not found")
+
+        # rooms and per-room availability
+        room_rows = session.exec(select(Room).where(Room.property_id == property_id)).all()
+        rooms: List[RoomAvailability] = []
+        for r in room_rows:
+            active_rows = session.exec(select(Booking.end_date).where(Booking.room_id == r.room_id, Booking.booking_status == 'Active')).all()
+            is_booked = len(active_rows) > 0
+            next_available = None
+            availability_text = "Available"
+            if is_booked:
+                parsed_dates = []
+                for ed in active_rows:
+                    val = ed[0] if isinstance(ed, (list, tuple)) and len(ed) > 0 else ed
+                    if isinstance(val, datetime):
+                        parsed_dates.append(val)
+                        continue
+                    if isinstance(val, date):
+                        parsed_dates.append(datetime(val.year, val.month, val.day))
+                        continue
+                    if isinstance(val, str):
+                        try:
+                            parsed_dates.append(datetime.fromisoformat(val))
+                            continue
+                        except Exception:
+                            pass
+                        try:
+                            parsed_dates.append(datetime.strptime(val, "%Y-%m-%d"))
+                            continue
+                        except Exception:
+                            pass
+                if parsed_dates:
+                    earliest = min(parsed_dates)
+                    next_available = earliest.date().isoformat()
+                    availability_text = f"Booked till {next_available}"
+                else:
+                    availability_text = "Booked"
+
+            rooms.append(RoomAvailability(
+                room_id=r.room_id,
+                property_id=r.property_id,
+                room_number=getattr(r, 'room_number', ''),
+                rent_per_month=getattr(r, 'rent_per_month', 0.0),
+                is_active=getattr(r, 'is_active', True),
+                is_booked=is_booked,
+                next_available=next_available,
+                availability_text=availability_text,
+            ))
+
+        # property-level availability summary
+        total_rooms = len(room_rows)
+        rooms_available = 0
+        is_full = False
+        prop_next_available = None
+        prop_availability_text = None
+        if total_rooms == 0:
+            rooms_available = 0
+            is_full = False
+            prop_availability_text = "No rooms"
+        else:
+            room_ids = [r.room_id for r in room_rows if getattr(r, 'room_id', None) is not None]
+            if not room_ids:
+                rooms_available = total_rooms
+                is_full = False
+                prop_availability_text = f"{total_rooms} rooms available"
+            else:
+                active_booked_rows = session.exec(select(Booking.room_id, Booking.end_date).where(Booking.booking_status == 'Active', Booking.room_id.in_(room_ids))).all()
+                booked_room_ids = set([rid for rid, _ in active_booked_rows])
+                unique_booked = len(booked_room_ids)
+                rooms_available = max(0, total_rooms - unique_booked)
+                is_full = (rooms_available == 0)
+                if rooms_available > 0:
+                    prop_availability_text = f"{rooms_available} rooms available"
+                else:
+                    end_dates = [ed for _, ed in active_booked_rows if ed]
+                    parsed_dates = []
+                    for ed in end_dates:
+                        if isinstance(ed, datetime):
+                            parsed_dates.append(ed)
+                            continue
+                        if isinstance(ed, date):
+                            parsed_dates.append(datetime(ed.year, ed.month, ed.day))
+                            continue
+                        if isinstance(ed, str):
+                            try:
+                                parsed_dates.append(datetime.fromisoformat(ed))
+                                continue
+                            except Exception:
+                                pass
+                            try:
+                                parsed_dates.append(datetime.strptime(ed, "%Y-%m-%d"))
+                                continue
+                            except Exception:
+                                pass
+                    if parsed_dates:
+                        earliest = min(parsed_dates)
+                        prop_next_available = earliest.date().isoformat()
+                        prop_availability_text = f"Booked till {prop_next_available}"
+                    else:
+                        prop_availability_text = "Fully booked"
+
+        # reviews with reviewer name
+        rev_stmt = select(Review, Customer.full_name).join(Customer, Customer.customer_id == Review.customer_id).where(Review.property_id == property_id)
+        rev_rows = session.exec(rev_stmt).all()
+        reviews: List[ReviewRead] = []
+        for rev, reviewer_name in rev_rows:
+            reviews.append(ReviewRead(
+                review_id=rev.review_id,
+                property_id=rev.property_id,
+                customer_id=rev.customer_id,
+                rating=rev.rating,
+                review_text=getattr(rev, 'review_text', None),
+                review_date=getattr(rev, 'review_date', None),
+                reviewer_name=reviewer_name,
+            ))
+
+        result = PropertyDetail(
+            property_id=prop.property_id,
+            owner_id=prop.owner_id,
+            property_description=prop.property_description,
+            room_description=prop.room_description,
+            property_type=prop.property_type,
+            city=prop.city,
+            address=prop.address,
+            google_maps_link=prop.google_maps_link,
+            verification_status=prop.verification_status,
+            average_rating=prop.average_rating,
+            is_full=is_full,
+            rooms_available=rooms_available,
+            next_available=prop_next_available,
+            availability_text=prop_availability_text,
+            rooms=rooms,
+            reviews=reviews,
+        )
+
+        return result
+    except HTTPException:
+        raise
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("get_property_detail failed: %s", exc)
         raise HTTPException(status_code=500, detail=f"Internal server error (see server logs)\n{tb}")

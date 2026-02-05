@@ -1,10 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 from .db import get_rental_session
-from .models import Property, UserAuth, Room
+from .models import Property, UserAuth, Room, Booking
 from .schemas import PropertyCreate, PropertyRead, BookingRead, RoomCreate, RoomRead, RoomAvailability
-from datetime import datetime
-from datetime import datetime
+from datetime import datetime, date
 from .deps import require_role, get_current_user
 import logging
 import traceback

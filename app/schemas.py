@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 
@@ -114,3 +114,23 @@ class ReviewRead(BaseModel):
     rating: int
     review_text: Optional[str] = None
     review_date: Optional[datetime] = None
+    reviewer_name: Optional[str] = None
+
+
+class PropertyDetail(BaseModel):
+    property_id: int
+    owner_id: int
+    property_description: str
+    room_description: str
+    property_type: Optional[str] = None
+    city: str
+    address: str
+    google_maps_link: Optional[str] = None
+    verification_status: Optional[str] = None
+    average_rating: Optional[float] = None
+    is_full: Optional[bool] = False
+    rooms_available: Optional[int] = 0
+    next_available: Optional[str] = None
+    availability_text: Optional[str] = None
+    rooms: Optional[List[RoomAvailability]] = None
+    reviews: Optional[List[ReviewRead]] = None
