@@ -9,7 +9,7 @@ from .models import Property, Room, Booking, Review, Customer
 from .schemas import PropertyRead, BookingCreate, BookingRead, RoomAvailability, ReviewCreate, ReviewRead, PropertyDetail
 from datetime import datetime
 from sqlalchemy.exc import IntegrityError, ProgrammingError
-from sqlalchemy import text
+from sqlalchemy import text, func, or_, exists
 import logging
 import traceback
 
@@ -19,9 +19,76 @@ router = APIRouter(prefix="/properties", tags=["properties"])
 
 
 @router.get("", response_model=List[PropertyRead])
-def list_properties(session: Session = Depends(get_rental_session)):
+def list_properties(
+    q: Optional[str] = None,
+    city: Optional[str] = None,
+    property_type: Optional[str] = None,
+    min_rating: Optional[float] = None,
+    max_rating: Optional[float] = None,
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+    available: Optional[bool] = None,  # current-day availability using room.is_booked
+    sort: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+    session: Session = Depends(get_rental_session),
+):
     try:
         stmt = select(Property)
+
+        # text query (simple ILIKE against description and city)
+        if q:
+            ilike_val = f"%{q}%"
+            stmt = stmt.where(or_(
+                Property.property_description.ilike(ilike_val),
+                Property.room_description.ilike(ilike_val),
+                Property.city.ilike(ilike_val),
+            ))
+
+        if city:
+            stmt = stmt.where(Property.city == city)
+
+        if property_type:
+            # normalize user input (trim whitespace)
+            property_type = property_type.strip()
+            allowed_types = {"Guest House", "Boys PG", "Girls PG", "Serviced Apartment"}
+            if property_type not in allowed_types:
+                raise HTTPException(status_code=400, detail=f"Invalid property_type: {property_type}. Allowed: {', '.join(sorted(allowed_types))}")
+            stmt = stmt.where(Property.property_type == property_type)
+
+        if min_rating is not None:
+            stmt = stmt.where(Property.average_rating >= min_rating)
+        if max_rating is not None:
+            stmt = stmt.where(Property.average_rating <= max_rating)
+
+        # price filtering: correlated EXISTS — require at least one active room within price range
+        if min_price is not None or max_price is not None:
+            room_sub = select(Room).where(Room.property_id == Property.property_id, Room.is_active == True)
+            if min_price is not None:
+                room_sub = room_sub.where(Room.rent_per_month >= min_price)
+            if max_price is not None:
+                room_sub = room_sub.where(Room.rent_per_month <= max_price)
+            stmt = stmt.where(room_sub.exists())
+
+        # availability (best-effort current-day using cached `room.is_booked`) using correlated EXISTS
+        if available is True:
+            avail_sub = select(Room).where(Room.property_id == Property.property_id, Room.is_active == True, Room.is_booked == False)
+            stmt = stmt.where(avail_sub.exists())
+        elif available is False:
+            avail_sub = select(Room).where(Room.property_id == Property.property_id, Room.is_active == True, Room.is_booked == True)
+            stmt = stmt.where(avail_sub.exists())
+
+        # safe sorting
+        sort_map = {
+            'rating_desc': Property.average_rating.desc(),
+            'rating_asc': Property.average_rating.asc(),
+            'city_asc': Property.city.asc(),
+            'city_desc': Property.city.desc(),
+        }
+        if sort in sort_map:
+            stmt = stmt.order_by(sort_map[sort])
+
+        stmt = stmt.offset(offset).limit(limit)
         props = session.exec(stmt).all()
         results = [PropertyRead(
             property_id=p.property_id,

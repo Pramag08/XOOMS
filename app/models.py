@@ -48,6 +48,8 @@ class Room(SQLModel, table=True):
     room_number: str
     rent_per_month: float
     is_active: bool = True
+    # cached availability (kept in sync by DB triggers in V4 schema)
+    is_booked: bool = False
 
 
 class Booking(SQLModel, table=True):
