@@ -1,7 +1,7 @@
 import './style.css'
 
 // Default to '/api' so Vite dev server can proxy requests to the backend.
-const API_BASE = (import.meta.env.VITE_API_URL as string) || '/api'
+import { api } from './api'
 
 const app = document.getElementById('app')!
 
@@ -22,6 +22,7 @@ app.innerHTML = `
       </form>
       <p id="msg" style="color:#f88;margin-top:8px"></p>
       <pre id="token" style="display:none;white-space:pre-wrap;text-align:left;max-width:640px;margin:12px auto;padding:8px;background:#111;border-radius:6px"></pre>
+      <div id="me" style="margin-top:12px;text-align:left;max-width:640px"></div>
     </div>
   </div>
 `
@@ -29,28 +30,20 @@ app.innerHTML = `
 const form = document.getElementById('login-form') as HTMLFormElement
 const msg = document.getElementById('msg') as HTMLParagraphElement
 const tokenPre = document.getElementById('token') as HTMLElement
+const meDiv = document.getElementById('me') as HTMLElement
 
 form.addEventListener('submit', async (ev) => {
   ev.preventDefault()
   msg.textContent = ''
   tokenPre.style.display = 'none'
+  meDiv.innerHTML = ''
 
   const formData = new FormData(form)
   const email = String(formData.get('email') || '')
   const password = String(formData.get('password') || '')
 
   try {
-    const res = await fetch(`${API_BASE}/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    })
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}))
-      msg.textContent = body.detail || `Login failed (${res.status})`
-      return
-    }
-    const data = await res.json()
+    const data = await api.post('/login', { email, password })
     const token = data.access_token
     if (token) {
       localStorage.setItem('access_token', token)
@@ -58,11 +51,19 @@ form.addEventListener('submit', async (ev) => {
       tokenPre.style.display = 'block'
       msg.style.color = '#8f8'
       msg.textContent = 'Login successful — token saved to localStorage.'
+
+      // fetch /me using api wrapper which will attach the token
+      try {
+        const me = await api.me()
+        meDiv.innerText = `Me: ${JSON.stringify(me, null, 2)}`
+      } catch (e: any) {
+        meDiv.innerText = `Failed to fetch /me: ${e?.body?.detail || e?.message || e}`
+      }
     } else {
       msg.textContent = 'Login succeeded but no token returned.'
     }
-  } catch (err) {
+  } catch (err: any) {
     console.error(err)
-    msg.textContent = 'Network error while calling API'
+    msg.textContent = err?.body?.detail || err?.message || 'Network error while calling API'
   }
 })
