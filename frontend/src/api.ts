@@ -1,41 +1,29 @@
-const API_BASE = (import.meta.env.VITE_API_URL as string) || '/api'
+import axios from 'axios'
 
-type ReqOpts = {
-  method?: string
-  headers?: Record<string, string>
-  body?: any
+const client = axios.create({
+  baseURL: '/api',
+  headers: { 'Content-Type': 'application/json' },
+})
+
+client.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token')
+  if (token && config.headers) config.headers.Authorization = `Bearer ${token}`
+  return config
+})
+
+export async function login(email: string, password: string) {
+  const res = await client.post('/login', { email, password })
+  return res.data
 }
 
-async function request(path: string, opts: ReqOpts = {}) {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
-  const headers: Record<string, string> = Object.assign({'Content-Type': 'application/json'}, opts.headers || {})
-  if (token) headers['Authorization'] = `Bearer ${token}`
-
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: opts.method || 'GET',
-    headers,
-    body: opts.body ? JSON.stringify(opts.body) : undefined,
-  })
-
-  const text = await res.text()
-  let body: any = null
-  try { body = text ? JSON.parse(text) : null } catch { body = text }
-
-  if (!res.ok) {
-    const err: any = new Error(body?.detail || `Request failed: ${res.status}`)
-    err.status = res.status
-    err.body = body
-    throw err
-  }
-  return body
+export async function me() {
+  const res = await client.get('/me')
+  return res.data
 }
 
-export const api = {
-  get: (path: string) => request(path, { method: 'GET' }),
-  post: (path: string, body?: any) => request(path, { method: 'POST', body }),
-  put: (path: string, body?: any) => request(path, { method: 'PUT', body }),
-  del: (path: string) => request(path, { method: 'DELETE' }),
-  me: () => request('/me'),
+export async function signup(payload: { email: string; password: string; full_name: string; role: string }) {
+  const res = await client.post('/signup', payload)
+  return res.data
 }
 
-export default api
+export default client
