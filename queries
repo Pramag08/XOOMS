@@ -1,6 +1,104 @@
-#LIST OF CUSTOMERS AND THEIR BOOKING COUNT
+
+--LIST OF CUSTOMERS AND THEIR BOOKING COUNT
 select c.customer_id, COUNT(b.booking_id) as booking_count from customers c left join booking b on c.customer_id = b.customer_id group by c.customer_id order by booking_count desc;
-#LIST OF ROOMS AND THEIR BOOKING COUNT
+
+--LIST OF ROOMS AND THEIR BOOKING COUNT
 select r.room_id, count(b.booking_id) from room r left join booking b on r.room_id=b.room_id group by r.room_id;
-#ROOMS WITH THE HIGHEST NUMBER OF BOOKINGS
+
+--ROOMS WITH THE HIGHEST NUMBER OF BOOKINGS
 select r.room_id, count(b.booking_id) from room r left join booking b on r.room_id=b.room_id group by r.room_id having count(b.booking_id) =(select max(cnt) from (select count(booking_id) as cnt from booking group by room_id));
+
+
+--AUTH ENDPOINT QUERIES --
+
+
+--LOGIN 
+SELECT user_id, email, password_hash, role, verification_status FROM users_auth WHERE email = "user_email";
+--FETCH USER INFO
+SELECT user_id, email, role, verification_status FROM users_auth WHERE user_id = "user_id";
+--LISTING ALL USERS
+SELECT user_id, email, role, verification_status FROM users_auth;
+--UPDATING USER PASSWORD
+UPDATE users_auth
+SET password_hash = 'new_password_hash'
+WHERE user_id = 'INT user_id';
+
+
+--CUSTOMER ENDPOINT QUERIES --
+
+--LIST ALL BOOKINGS of a specific customer
+SELECT b.booking_id, b.customer_id, c.full_name as customer_name, b.room_id, b.start_date, b.end_date,
+b.booking_status
+FROM booking as b
+JOIN customer as c on b.customer_id = c.customer_id
+JOIN room as r on b.room_id = r.room_id
+WHERE c.user_id = 'INT user_id'
+ORDER BY b.booking_id;
+--UPDATE BOOKING STATUS
+UPDATE booking
+SET booking_status = 'Active'
+start_date = 'YYYY-MM-DD', end_date ='yyyy-mm-dd'
+WHERE booking_id='INT booking_id' 
+AND customer_id = (SELECT customer_id FROM customer WHERE user_id = 'INT user_id');
+--DELETE BOOKING
+UPDATE booking
+SET booking_status = 'CANCELLED'
+WHERE booking_id='INT booking_id' 
+AND customer_id = (SELECT customer_id FROM customer WHERE user_id = 'INT user_id');
+
+
+--PROPERTY ENDPOINT QUERIES--
+--LIST ALL PROPERTIES (FILTER BY CITY)
+SELECT property_id, property_description, city, property_type
+FROM property
+WHERE city = 'city'
+LIMIT 50;
+
+--LIST PROPERTY (FILTER BY PRICE)
+SELECT DISTINCT p.property_id, p.city, p.average_rating FROM property p
+WHERE EXISTS (
+  SELECT 1 FROM room r WHERE r.property_id = p.property_id AND r.is_active = TRUE
+  AND r.rent_per_month >= 5000 AND r.rent_per_month <= 15000
+) LIMIT 50;
+
+--CREATE BOOKING
+INSERT INTO booking (customer_id, room_id, start_date, end_date, booking_status)
+VALUES ((SELECT customer_id FROM customers WHERE user_id = 1), 1, '2026-03-01', '2026-03-31', 'Active') 
+RETURNING booking_id;
+
+--ADD REVIEW
+INSERT INTO review
+(customer_id, property_id, rating, review_text, review_date)
+VALUES ((SELECT customer_id FROM customers WHERE user_id = 1), 1, 5, 'Nice Stay', '2026-03-31')
+RETURNING review_id;
+
+--LIST REVIEWS OF A PROPERTY
+SELECT r.review_id, r.property_id, c.full_name as reviewer_name, r.rating, r.review_text, r.review_date
+FROM review r 
+JOIN customers c ON r.customer_id = c.customer_id 
+WHERE r.property_id = 1 
+ORDER BY r.review_date DESC;
+
+--OWNER ENDPOINT QUERIES--
+
+--ADD NEW PROPERTY
+INSERT INTO property
+(owner_id, property_description,room_description, 
+ property_type, city, address, verification_status, google_maps_link)
+VALUES
+((SELECT owner_id FROM owner WHERE customer_id IN (SELECT customer_id FROM customers WHERE user_id = 'INT user_id')),
+'Property Description', 'Room Description', 'Type', 'City', 'Address', 'Pending', 'Google Maps Link')
+RETURNING property_id;
+
+--ADD ROOM
+INSERT INTO room
+(property_id, room_number, rent_per_month, is_active, is_booked)
+VALUES
+('INT property_id', 'A101', 10000.00, TRUE, FALSE) RETURNING room_id;
+
+--LIST ALL BOOKINGS FOR OWNER'S PROPERTIES
+SELECT b.booking_id, c.full_name as customer_name, r.room_number, b.start_date, b.end_date, b.booking_status
+FROM booking b JOIN room r ON b.room_id = r.room_id JOIN property p ON r.property_id = p.property_id
+JOIN customers c ON b.customer_id = c.customer_id
+WHERE p.owner_id = (SELECT owner_id FROM owner WHERE customer_id IN (SELECT customer_id FROM customers WHERE user_id = 1))
+ORDER BY b.start_date;
