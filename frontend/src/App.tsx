@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { ThemeProvider, createTheme, CssBaseline, Container, Box, Typography } from '@mui/material'
 import SignInPage from './pages/SignInPage'
+import DashboardLayout from './components/DashboardLayout'
 import Home from './pages/Home'
 import SignUpPage from './pages/SignUpPage'
 import { login, me } from './api'
@@ -52,21 +53,7 @@ export default function App() {
           <SignUpPage onSignup={setUser} />
         )
       ) : (
-        <Container>
-          <Container maxWidth="sm">
-            <Box sx={{ mt: 2, bgcolor: 'background.paper', borderRadius: 1, p: 3 }}>
-              <Typography variant="h4" component="h1" gutterBottom>
-                Welcome,
-              </Typography>
-              <Box sx={{ mt: 2 }}>
-                <Typography variant="h6">Account</Typography>
-                <Typography>User ID: {user.user_id}</Typography>
-                <Typography>Email: {user.email}</Typography>
-                <Typography>Role: {user.role}</Typography>
-              </Box>
-            </Box>
-          </Container>
-        </Container>
+        <DashboardLayout user={user} onLogout={() => { localStorage.removeItem('token'); setUser(null); setView('home') }} />
       )}
     </ThemeProvider>
   )
