@@ -15,7 +15,7 @@ export default function TopNav({ title, onBack, onProfile, onToggleFilters, onLo
   const handleClose = () => setAnchorEl(null)
 
   return (
-    <AppBar position="static" color="transparent" elevation={0} sx={{ borderBottom: (t) => `1px solid ${t.palette.divider}` }}>
+    <AppBar position="sticky" color="transparent" elevation={1} sx={{ borderBottom: (t) => `1px solid ${t.palette.divider}`, top: 0, zIndex: (t) => t.zIndex.appBar }}>
       <Toolbar>
         <IconButton edge="start" color="inherit" onClick={onBack} sx={{ mr: 1 }}>
           <ArrowBackIcon />

@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react'
-import { BrowserRouter } from 'react-router-dom'
-import { ThemeProvider, createTheme, CssBaseline, Container, Box, Typography } from '@mui/material'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { ThemeProvider, createTheme, CssBaseline } from '@mui/material'
 import SignInPage from './pages/SignInPage'
-// Dashboard removed for now — keep hero as primary view
 import Home from './pages/Home'
 import SearchPage from './pages/SearchPage'
 import SignUpPage from './pages/SignUpPage'
@@ -57,7 +56,6 @@ const theme = createTheme({
 
 export default function App() {
   const [user, setUser] = useState<any | null>(null)
-  const [view, setView] = useState<'home' | 'login' | 'signup'>('home')
   const [showSearch, setShowSearch] = useState(false)
 
   const BRANDING = {
@@ -80,6 +78,8 @@ export default function App() {
       // redirect to search after login
       setShowSearch(true)
       localStorage.setItem('showSearch', '1')
+      // navigate to search
+      window.location.href = '/search'
     }
   }
 
@@ -105,26 +105,21 @@ export default function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <BrowserRouter>
-      {!user ? (
-        view === 'home' ? (
-          <Home onNavigate={setView} />
-        ) : view === 'login' ? (
-          <SignInPage
-            branding={BRANDING}
-            signIn={signIn}
-            providers={[]}
-            slotProps={{ emailField: { autoFocus: false }, form: { noValidate: true } }}
-          />
-        ) : (
-          <SignUpPage onSignup={setUser} />
-        )
-      ) : (
-        showSearch ? (
-          <SearchPage user={user} onBack={() => setShowSearch(false)} onLogout={() => { localStorage.removeItem('token'); setUser(null); setShowSearch(false); localStorage.removeItem('showSearch') }} />
-        ) : (
-          <Home onNavigate={() => setShowSearch(true)} />
-        )
-      )}
+        <Routes>
+          <Route path="/" element={<Home onNavigate={(viewOrPath: any, opts?: any) => {
+            // allow previous contract: Home may call onNavigate('login'|'signup') or onNavigate('search', params)
+            if (viewOrPath === 'login') return window.location.href = '/login'
+            if (viewOrPath === 'signup') return window.location.href = '/signup'
+            if (viewOrPath === 'search') {
+              const sp = new URLSearchParams(opts || {})
+              window.location.href = '/search' + (sp.toString() ? `?${sp.toString()}` : '')
+            }
+          }} />} />
+          <Route path="/login" element={<SignInPage branding={BRANDING} signIn={signIn} providers={[]} slotProps={{ emailField: { autoFocus: false }, form: { noValidate: true } }} />} />
+          <Route path="/signup" element={<SignUpPage onSignup={setUser} />} />
+          <Route path="/search" element={<SearchPage user={user} onBack={() => { window.history.back() }} onLogout={() => { localStorage.removeItem('token'); setUser(null); localStorage.removeItem('showSearch'); window.location.href = '/' }} />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </BrowserRouter>
     </ThemeProvider>
   )
