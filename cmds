@@ -9,3 +9,4 @@ npm install @mui/lab
 npm install -D tailwindcss postcss autoprefixer
 npx tailwindcss init -p
 npm run dev
+npm install react-router-dom
