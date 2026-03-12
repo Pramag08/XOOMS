@@ -12,6 +12,10 @@ from sqlalchemy.exc import IntegrityError, ProgrammingError
 from sqlalchemy import text, func, or_, exists
 import logging
 import traceback
+import asyncio
+from datetime import datetime, date as _date
+from sqlmodel import Session
+from .db import rental_engine
 
 logger = logging.getLogger(__name__)
 
@@ -210,6 +214,49 @@ def list_properties(
         raise HTTPException(status_code=500, detail=f"Internal server error (see server logs)\n{tb}")
 
 
+async def expire_bookings_loop(sleep_seconds: int = 24 * 3600):
+    """Background loop that marks bookings whose end_date has passed as Completed.
+
+    This runs periodically (default daily). It is safe to call multiple times.
+    """
+    while True:
+        try:
+            today = _date.today()
+            changed = 0
+            with Session(rental_engine) as session:
+                stmt = select(Booking).where(Booking.booking_status == 'Active')
+                rows = session.exec(stmt).all()
+                for b in rows:
+                    ed = getattr(b, 'end_date', None)
+                    if not ed:
+                        continue
+                    parsed = None
+                    if isinstance(ed, str):
+                        try:
+                            parsed = datetime.fromisoformat(ed).date()
+                        except Exception:
+                            try:
+                                parsed = datetime.strptime(ed, "%Y-%m-%d").date()
+                            except Exception:
+                                parsed = None
+                    elif isinstance(ed, datetime):
+                        parsed = ed.date()
+                    elif isinstance(ed, _date):
+                        parsed = ed
+
+                    if parsed and parsed < today:
+                        b.booking_status = 'Completed'
+                        session.add(b)
+                        changed += 1
+
+                if changed > 0:
+                    session.commit()
+                    logger.info("expire_bookings_loop: marked %d bookings completed", changed)
+        except Exception:
+            logger.exception("expire_bookings_loop failed")
+        await asyncio.sleep(sleep_seconds)
+
+
 class RoomOut(BaseException):
     pass
 
@@ -311,14 +358,20 @@ def create_booking_for_property(property_id: int, payload: BookingCreate, curren
             booking_status='Active',
         )
 
+        # avoid nested transaction errors by using explicit add/flush/commit
+        session.add(booking)
+        logger.debug("create_booking_for_property: after add booking=%s", getattr(booking, 'booking_id', None))
+        session.flush()
+        logger.debug("create_booking_for_property: after flush booking=%s", getattr(booking, 'booking_id', None))
         try:
-            with session.begin():
-                session.add(booking)
-                session.flush()
-                session.refresh(booking)
+            session.commit()
+            logger.debug("create_booking_for_property: committed booking=%s", getattr(booking, 'booking_id', None))
         except IntegrityError as e:
+            # rollback and translate to 409 conflict
+            session.rollback()
             logger.exception("IntegrityError creating booking: %s", e)
             raise HTTPException(status_code=409, detail="Booking conflicts with existing active booking")
+        session.refresh(booking)
 
         return BookingRead(
             booking_id=booking.booking_id,

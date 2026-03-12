@@ -36,13 +36,15 @@ def update_booking_customer(booking_id: int, payload: BookingUpdate, current_use
         if payload.booking_status is not None:
             booking.booking_status = payload.booking_status
 
+        # avoid nested transaction errors by using explicit add/flush/commit
+        session.add(booking)
+        session.flush()
         try:
-            with session.begin():
-                session.add(booking)
-                session.flush()
-                session.refresh(booking)
-        except IntegrityError:
+            session.commit()
+        except IntegrityError as e:
+            session.rollback()
             raise HTTPException(status_code=409, detail="Booking conflicts with existing active booking")
+        session.refresh(booking)
 
         room = session.get(Room, booking.room_id)
         return BookingRead(

@@ -60,9 +60,21 @@ export default function Dashboard() {
   const [activeBooking, setActiveBooking] = useState<any | null>(null);
   const [bookingHistory, setBookingHistory] = useState<any[]>([]);
   const [myReviews, setMyReviews] = useState<any[]>([]);
+  const [editingBookingId, setEditingBookingId] = useState<number | null>(null);
+  const [editStartDate, setEditStartDate] = useState<string>('');
+  const [editEndDate, setEditEndDate] = useState<string>('');
+  const [editError, setEditError] = useState<string | null>(null);
+  const [savingEdit, setSavingEdit] = useState<boolean>(false);
+  // Review modal state
+  const [showReviewModal, setShowReviewModal] = useState<boolean>(false);
+  const [reviewBooking, setReviewBooking] = useState<any | null>(null);
+  const [reviewRating, setReviewRating] = useState<number>(5);
+  const [reviewText, setReviewText] = useState<string>('');
+  const [reviewSubmitting, setReviewSubmitting] = useState<boolean>(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
 
   // Use mock data as fallback
-  const customerData = user ? { fullName: (user as any).fullName || 'Resident', email: (user as any).email || '' } : { fullName: 'Resident', email: '' };
+  const customerData = user ? { fullName: (user as any).fullName || '', email: (user as any).email || '' } : { fullName: '', email: '' };
 
   useEffect(() => {
     let mounted = true;
@@ -81,22 +93,29 @@ export default function Dashboard() {
         await Promise.all(propIds.map(async (pid) => {
           try {
             const p = await apiFetch(`/properties/${pid}`);
-            propsMap[pid] = p;
+            // also fetch rooms for this property to obtain room-level rent
+            const rooms = await apiFetch(`/properties/${pid}/rooms`).catch(() => []);
+            propsMap[pid] = { property: p, rooms };
           } catch {
-            propsMap[pid] = null;
+            propsMap[pid] = { property: null, rooms: [] };
           }
         }));
 
         // map bookings to include property metadata
-        const mapped = bookings.map(b => ({
-          ...b,
-          property: propsMap[b.property_id] || null,
-        }));
+        const mapped = bookings.map(b => {
+          const pm = propsMap[b.property_id] || { property: null, rooms: [] };
+          const room = (pm.rooms || []).find((r: any) => r.room_id === b.room_id) || null;
+          return {
+            ...b,
+            property: pm.property || null,
+            room,
+          };
+        });
 
-        const active = mapped.find(b => b.booking_status && b.booking_status.toLowerCase() === 'active') || null;
+        const activeList = mapped.filter(b => b.booking_status && b.booking_status.toLowerCase() === 'active');
         const history = mapped.filter(b => !(b.booking_status && b.booking_status.toLowerCase() === 'active'));
 
-        setActiveBooking(active);
+        setActiveBooking(activeList);
         setBookingHistory(history);
         // reviews can be read from property details' reviews or left empty for now
         const reviews: any[] = [];
@@ -159,77 +178,124 @@ export default function Dashboard() {
           {/* Section 1: Active Lease (Hero Card) */}
           <motion.div variants={itemVariants} className="w-full">
             <div className="flex items-center justify-between mb-6 px-2">
-              <h2 className="font-serif text-2xl text-charcoal">Current Residence</h2>
+              <h2 className="font-serif text-2xl text-charcoal">Current Bookings</h2>
             </div>
 
-                <div className="bg-white rounded-[2.5rem] p-3 shadow-xl shadow-charcoal/5 border border-charcoal/5 overflow-hidden">
-                  {loading ? (
-                    <div className="p-8 text-center">Loading current residence…</div>
-                  ) : error ? (
-                    <div className="p-8 text-center text-red-600">{error}</div>
-                  ) : activeBooking ? (
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-0 lg:gap-8">
-                      {/* Image Side */}
-                      <div className="lg:col-span-5 relative h-64 lg:h-auto rounded-[2rem] overflow-hidden group">
-                        <img
-                          src={(activeBooking.property && activeBooking.property.property_description) ? (activeBooking.property.google_maps_link || '') : ''}
-                          alt={activeBooking.property?.property_description || 'Property'}
-                          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                          onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/images/unsplash1.jpg'; }}
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
-                        <div className="absolute bottom-6 left-6 text-white">
-                          <p className="text-[10px] font-bold uppercase tracking-widest opacity-80 mb-1">Unit {activeBooking.room_number || activeBooking.room_number}</p>
-                          <p className="font-serif text-2xl">{activeBooking.property?.city || activeBooking.city}</p>
-                        </div>
+            <div className="bg-white rounded-[2.5rem] p-3 shadow-xl shadow-charcoal/5 border border-charcoal/5 overflow-hidden">
+              {loading ? (
+                <div className="p-8 text-center">Loading current bookings…</div>
+              ) : error ? (
+                <div className="p-8 text-center text-red-600">{error}</div>
+              ) : (Array.isArray(activeBooking) && activeBooking.length > 0) ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6">
+                  {activeBooking.map((ab: any) => (
+                      <div key={ab.booking_id} className="flex gap-4 bg-white rounded-xl p-4 border border-charcoal/5 shadow-sm">
+                      <div className="w-36 h-28 rounded-lg overflow-hidden relative">
+                        <img src={ab.property?.google_maps_link || '/images/unsplash1.jpg'} className="w-full h-full object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/images/unsplash1.jpg'; }} />
                       </div>
-
-                      {/* Details Side */}
-                      <div className="lg:col-span-7 p-6 lg:p-8 flex flex-col justify-between">
-                        <div className="flex justify-between items-start mb-8">
+                      <div className="flex-1">
+                        <div className="flex justify-between items-start">
                           <div>
-                            <h3 className="font-serif text-3xl md:text-4xl text-charcoal mb-2">{activeBooking.property?.property_description || activeBooking.property?.room_description || 'Your Residence'}</h3>
-                            <div className="flex items-center gap-2 text-charcoal/60 text-sm">
-                              <MapPin className="w-4 h-4" />
-                              {activeBooking.property?.city || activeBooking.city}, India
-                            </div>
+                            <h3 className="font-serif text-xl text-charcoal">{ab.property?.property_description || 'Property'}</h3>
+                            <div className="text-sm text-charcoal/60">Unit {ab.room_number}</div>
+                            <div className="text-xs text-charcoal/40">{ab.property?.city}</div>
                           </div>
                           <div className="text-right">
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-charcoal/40 mb-1">Monthly Rent</p>
-                            <p className="font-sans text-3xl text-charcoal">₹{(activeBooking.property?.average_rent ?? 0).toLocaleString()}</p>
+                            <div className="text-[10px] font-bold uppercase tracking-widest text-charcoal/40">Monthly Rent</div>
+                            <div className="font-sans text-2xl text-charcoal">₹{((ab.room && ab.room.rent_per_month) ?? ab.property?.average_rent ?? 0).toLocaleString()}</div>
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-6 mb-8 py-8 border-y border-charcoal/5">
-                          <div>
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-charcoal/40 mb-2 flex items-center gap-1"><Calendar className="w-3 h-3" /> Start Date</p>
-                            <p className="font-mono text-sm text-charcoal">{activeBooking.start_date}</p>
-                          </div>
-                          <div>
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-charcoal/40 mb-2 flex items-center gap-1"><Clock className="w-3 h-3" /> End Date</p>
-                            <p className="font-mono text-sm text-charcoal">{activeBooking.end_date}</p>
-                          </div>
-                          <div>
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-charcoal/40 mb-2 flex items-center gap-1"><FileText className="w-3 h-3" /> Residence Id</p>
-                            <p className="font-mono text-sm text-charcoal">{activeBooking.booking_id}</p>
-                          </div>
-                        </div>
-
-                        <div className="flex gap-4">
-                          <button className="flex-1 bg-charcoal text-white py-4 rounded-xl font-sans text-xs uppercase tracking-widest font-bold hover:bg-black transition-colors">
-                            Extend Lease
-                          </button>
-                          <button className="flex-1 border border-charcoal/20 text-charcoal py-4 rounded-xl font-sans text-xs uppercase tracking-widest font-bold hover:bg-charcoal/5 transition-colors">
-                            Cancel Lease
-                          </button>
+                        <div className="mt-3 text-sm text-charcoal/60">
+                          {editingBookingId === ab.booking_id ? (
+                            <div className="space-y-2">
+                              <div className="grid grid-cols-2 gap-2">
+                                <input className="p-2 border rounded" type="date" value={editStartDate} onChange={(e) => setEditStartDate(e.target.value)} />
+                                <input className="p-2 border rounded" type="date" value={editEndDate} onChange={(e) => setEditEndDate(e.target.value)} />
+                              </div>
+                              <div className="flex gap-2">
+                                <button className="px-3 py-2 bg-charcoal text-white rounded" disabled={savingEdit} onClick={async () => {
+                                  setEditError(null);
+                                  setSavingEdit(true);
+                                  try {
+                                    const payload = { start_date: editStartDate, end_date: editEndDate };
+                                    const res: any = await apiFetch(`/customer/mybookings/${ab.booking_id}`, { method: 'PUT', body: JSON.stringify(payload) });
+                                    // update local state
+                                    setActiveBooking((prev: any[]) => prev.map(p => p.booking_id === ab.booking_id ? { ...p, start_date: res.start_date, end_date: res.end_date } : p));
+                                    setBookingHistory((prev: any[]) => prev.map(p => p.booking_id === ab.booking_id ? { ...p, start_date: res.start_date, end_date: res.end_date } : p));
+                                    setEditingBookingId(null);
+                                  } catch (err: any) {
+                                    setEditError(err?.body || err?.message || 'Failed to save');
+                                  } finally {
+                                    setSavingEdit(false);
+                                  }
+                                }}>Save</button>
+                                <button className="px-3 py-2 border rounded" onClick={() => { setEditingBookingId(null); setEditError(null); }}>{savingEdit ? 'Cancel' : 'Cancel'}</button>
+                              </div>
+                              {editError && <div className="text-xs text-red-600">{editError}</div>}
+                            </div>
+                          ) : (
+                            <>
+                              <div>From: <span className="font-mono">{ab.start_date}</span></div>
+                              <div>To: <span className="font-mono">{ab.end_date}</span></div>
+                              <div className="mt-2 text-xs text-charcoal/50">Booking ID: <span className="font-mono">{ab.booking_id}</span></div>
+                            </>
+                          )}
                         </div>
                       </div>
+                      <div className="flex flex-col gap-2 items-end">
+                        {editingBookingId !== ab.booking_id ? (
+                          <button className="px-3 py-2 border rounded text-sm" onClick={() => { setEditingBookingId(ab.booking_id); setEditStartDate(ab.start_date || ''); setEditEndDate(ab.end_date || ''); setEditError(null); }}>Edit</button>
+                        ) : null}
+                      </div>
                     </div>
-                  ) : (
-                    <div className="p-8 text-center">No active bookings</div>
-                  )}
+                  ))}
                 </div>
+              ) : (
+                <div className="p-8 text-center">No active bookings</div>
+              )}
+            </div>
           </motion.div>
+          {/* Review Modal */}
+          {showReviewModal && reviewBooking && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center">
+              <div className="absolute inset-0 bg-black/40" onClick={() => { if (!reviewSubmitting) setShowReviewModal(false); }} />
+              <div className="relative bg-white rounded-2xl p-6 w-full max-w-lg mx-4 z-50">
+                <h3 className="font-serif text-xl mb-2">Leave a review for {reviewBooking.property?.property_description || 'the property'}</h3>
+                <div className="flex items-center gap-3 mb-3">
+                  <label className="text-sm text-charcoal/60">Rating</label>
+                  <select value={reviewRating} onChange={(e) => setReviewRating(Number(e.target.value))} className="p-2 border rounded">
+                    {[5,4,3,2,1].map((r) => (
+                      <option key={r} value={r}>{r} ★</option>
+                    ))}
+                  </select>
+                </div>
+                <textarea value={reviewText} onChange={(e) => setReviewText(e.target.value)} rows={5} className="w-full p-3 border rounded mb-4" placeholder="Share your experience (optional)" />
+                <div className="flex items-center gap-3">
+                  <button disabled={reviewSubmitting} onClick={async () => {
+                    setReviewSubmitting(true);
+                    setReviewError(null);
+                    try {
+                      const pid = reviewBooking.property?.property_id;
+                      if (!pid) throw new Error('Property not available');
+                      const payload = { rating: reviewRating, review_text: reviewText };
+                      await apiFetch(`/properties/${pid}/reviews`, { method: 'POST', body: JSON.stringify(payload) });
+                      // append to local reviews list
+                      setMyReviews((prev) => [{ bookingId: reviewBooking.booking_id, city: reviewBooking.property?.city, rating: reviewRating, reviewText: reviewText, reviewDate: (new Date()).toISOString().split('T')[0] }, ...prev]);
+                      setShowReviewModal(false);
+                      setReviewBooking(null);
+                    } catch (err: any) {
+                      setReviewError(err?.body || err?.message || 'Failed to submit review');
+                    } finally {
+                      setReviewSubmitting(false);
+                    }
+                  }} className="bg-blue-600 text-white px-4 py-2 rounded">Submit</button>
+                  <button disabled={reviewSubmitting} onClick={() => { setShowReviewModal(false); setReviewBooking(null); }} className="px-4 py-2 border rounded">Cancel</button>
+                  {reviewError && <div className="text-sm text-red-600">{reviewError}</div>}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Section 2: Past Bookings & History */}
           <motion.div variants={itemVariants} className="w-full">
@@ -276,7 +342,7 @@ export default function Dashboard() {
                                 <p className="text-sm text-charcoal/80 italic">"{review.reviewText}"</p>
                               </div>
                             ) : (
-                              <button className="text-[10px] font-bold uppercase tracking-widest text-charcoal/40 hover:text-charcoal border border-dashed border-charcoal/20 px-4 py-3 rounded-xl hover:border-charcoal/40 hover:bg-white transition-all flex items-center gap-2">
+                              <button onClick={() => { setReviewBooking(booking); setReviewRating(5); setReviewText(''); setReviewError(null); setShowReviewModal(true); }} className="text-[10px] font-bold uppercase tracking-widest text-charcoal/40 hover:text-charcoal border border-dashed border-charcoal/20 px-4 py-3 rounded-xl hover:border-charcoal/40 hover:bg-white transition-all flex items-center gap-2">
                                 <MessageSquarePlus className="w-4 h-4" /> Write a Review
                               </button>
                             )}

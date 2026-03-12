@@ -21,7 +21,7 @@ export default function WelcomeScreen({ name }: WelcomeScreenProps) {
           className="text-center"
         >
           <h1 className="font-serif text-4xl md:text-6xl text-charcoal mb-4">
-            Welcome, {name}
+            Welcome, {name || 'there'}
           </h1>
           <motion.div 
             initial={{ scaleX: 0 }}

@@ -5,7 +5,7 @@ import {
   Thermometer, Monitor, Heart, Share2,
   Maximize2, Mail, Phone
 } from 'lucide-react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { apiFetch } from '@/lib/api';
 
@@ -114,6 +114,13 @@ export default function PropertyDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<PropertyDetailModel | null>(null);
+  const navigate = useNavigate();
+
+  // Booking form state
+  const [selectedRoom, setSelectedRoom] = useState<number | null>(null);
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
+  const [bookingStatus, setBookingStatus] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -301,9 +308,51 @@ export default function PropertyDetail() {
                   </div>
                 </div>
 
-                <button className="w-full border border-charcoal text-charcoal py-4 rounded-xl font-sans text-xs uppercase tracking-widest font-bold hover:bg-charcoal/5 transition-colors mb-3">
-                  Contact Owner
-                </button>
+                {/* Booking form for customers */}
+                {data.rooms && data.rooms.length > 0 ? (
+                  <div className="space-y-4 mb-4">
+                    <label className="text-xs text-charcoal/60">Select room</label>
+                    <select className="w-full p-3 border rounded" value={selectedRoom ?? ''} onChange={(e) => setSelectedRoom(e.target.value ? Number(e.target.value) : null)}>
+                      <option value="">Choose a room</option>
+                      {data.rooms.map((r) => (
+                        <option key={r.room_id} value={r.room_id} disabled={r.is_booked}>{`${r.room_number} — ₹${r.rent_per_month}/mo ${r.is_booked ? '(Booked)' : ''}`}</option>
+                      ))}
+                    </select>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <input className="p-3 border rounded" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                      <input className="p-3 border rounded" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                    </div>
+
+                    <button
+                      onClick={async () => {
+                        setBookingStatus(null);
+                        if (!selectedRoom || !startDate || !endDate) {
+                          setBookingStatus('Select room and both dates');
+                          return;
+                        }
+                        try {
+                          const payload = { room_id: selectedRoom, start_date: startDate, end_date: endDate };
+                          const res: any = await apiFetch(`/properties/${id}/bookings`, { method: 'POST', body: JSON.stringify(payload) });
+                          setBookingStatus('Booking successful');
+                          // navigate to booking detail
+                          if (res && res.booking_id) navigate(`/booking/${res.booking_id}`);
+                        } catch (err: any) {
+                          setBookingStatus(err?.body || err?.message || 'Booking failed');
+                        }
+                      }}
+                      className="w-full bg-green-600 text-white py-3 rounded-xl font-sans text-sm font-bold hover:bg-green-700 transition-colors"
+                    >
+                      Book Now
+                    </button>
+
+                    {bookingStatus && <div className="text-xs text-charcoal/60 mt-2">{bookingStatus}</div>}
+                  </div>
+                ) : (
+                  <button className="w-full border border-charcoal text-charcoal py-4 rounded-xl font-sans text-xs uppercase tracking-widest font-bold hover:bg-charcoal/5 transition-colors mb-3">
+                    Contact Owner
+                  </button>
+                )}
               </div>
 
             </div>
@@ -324,10 +373,9 @@ export default function PropertyDetail() {
                 <span className="text-charcoal/60 text-sm">Based on {data.reviews?.length ?? 0} reviews</span>
               </div>
             </div>
-            <button className="hidden md:block border border-charcoal/20 px-6 py-3 rounded-full text-xs uppercase tracking-widest font-bold hover:bg-charcoal hover:text-white transition-colors">
-              Write a Review
-            </button>
+            {/* review button removed; reviews are left from Dashboard completed bookings */}
           </div>
+          
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {data.reviews && data.reviews.length ? data.reviews.map((review) => (
