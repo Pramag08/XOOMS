@@ -22,7 +22,7 @@ export default function Hero() {
 
       {/* Search Pill */}
       <div className="z-20 w-full flex justify-center mb-20 md:mb-32">
-        <SearchPill />
+        <SearchPill editable />
       </div>
 
       {/* Arch Gallery */}

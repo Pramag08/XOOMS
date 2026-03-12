@@ -2,6 +2,8 @@ import { motion } from 'motion/react';
 import { CheckCircle, Calendar, MapPin, Star, Clock, ArrowRight, MessageSquarePlus, Shield, Phone, Mail, FileText, Home } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { apiFetch } from '@/lib/api';
 
 // Mock Data matching the schema
 const mockDbData = {
@@ -53,9 +55,60 @@ const itemVariants = {
 
 export default function Dashboard() {
   const { user } = useAuth();
-  
-  // Use mock data but override name/email with context user if available
-  const customerData = user ? { ...mockDbData.customer, ...user } : mockDbData.customer;
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [activeBooking, setActiveBooking] = useState<any | null>(null);
+  const [bookingHistory, setBookingHistory] = useState<any[]>([]);
+  const [myReviews, setMyReviews] = useState<any[]>([]);
+
+  // Use mock data as fallback
+  const customerData = user ? { fullName: (user as any).fullName || 'Resident', email: (user as any).email || '' } : { fullName: 'Resident', email: '' };
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        // fetch customer's bookings
+        const bookings: any[] = await apiFetch('/customer/mybookings').catch(() => []);
+
+        if (!mounted) return;
+
+        // fetch property details for each booking in parallel
+        const propIds = Array.from(new Set(bookings.map(b => b.property_id).filter(Boolean)));
+        const propsMap: Record<number, any> = {};
+        await Promise.all(propIds.map(async (pid) => {
+          try {
+            const p = await apiFetch(`/properties/${pid}`);
+            propsMap[pid] = p;
+          } catch {
+            propsMap[pid] = null;
+          }
+        }));
+
+        // map bookings to include property metadata
+        const mapped = bookings.map(b => ({
+          ...b,
+          property: propsMap[b.property_id] || null,
+        }));
+
+        const active = mapped.find(b => b.booking_status && b.booking_status.toLowerCase() === 'active') || null;
+        const history = mapped.filter(b => !(b.booking_status && b.booking_status.toLowerCase() === 'active'));
+
+        setActiveBooking(active);
+        setBookingHistory(history);
+        // reviews can be read from property details' reviews or left empty for now
+        const reviews: any[] = [];
+        setMyReviews(reviews);
+      } catch (err: any) {
+        setError(err?.message || 'Failed to load dashboard');
+      } finally {
+        setLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [user]);
 
   return (
     <div className="min-h-screen bg-bone pt-24 pb-20 px-4 md:px-12">
@@ -106,69 +159,76 @@ export default function Dashboard() {
           {/* Section 1: Active Lease (Hero Card) */}
           <motion.div variants={itemVariants} className="w-full">
             <div className="flex items-center justify-between mb-6 px-2">
-               <h2 className="font-serif text-2xl text-charcoal">Current Residence</h2>
+              <h2 className="font-serif text-2xl text-charcoal">Current Residence</h2>
             </div>
-            
-            <div className="bg-white rounded-[2.5rem] p-3 shadow-xl shadow-charcoal/5 border border-charcoal/5 overflow-hidden">
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-0 lg:gap-8">
-                
-                {/* Image Side */}
-                <div className="lg:col-span-5 relative h-64 lg:h-auto rounded-[2rem] overflow-hidden group">
-                   <img 
-                      src={mockDbData.activeBooking.image} 
-                      alt="Property" 
-                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                   />
-                   <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
-                   <div className="absolute bottom-6 left-6 text-white">
-                      <p className="text-[10px] font-bold uppercase tracking-widest opacity-80 mb-1">Unit {mockDbData.activeBooking.roomNumber}</p>
-                      <p className="font-serif text-2xl">{mockDbData.activeBooking.city}</p>
-                   </div>
+
+                <div className="bg-white rounded-[2.5rem] p-3 shadow-xl shadow-charcoal/5 border border-charcoal/5 overflow-hidden">
+                  {loading ? (
+                    <div className="p-8 text-center">Loading current residence…</div>
+                  ) : error ? (
+                    <div className="p-8 text-center text-red-600">{error}</div>
+                  ) : activeBooking ? (
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-0 lg:gap-8">
+                      {/* Image Side */}
+                      <div className="lg:col-span-5 relative h-64 lg:h-auto rounded-[2rem] overflow-hidden group">
+                        <img
+                          src={(activeBooking.property && activeBooking.property.property_description) ? (activeBooking.property.google_maps_link || '') : ''}
+                          alt={activeBooking.property?.property_description || 'Property'}
+                          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                          onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/images/unsplash1.jpg'; }}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+                        <div className="absolute bottom-6 left-6 text-white">
+                          <p className="text-[10px] font-bold uppercase tracking-widest opacity-80 mb-1">Unit {activeBooking.room_number || activeBooking.room_number}</p>
+                          <p className="font-serif text-2xl">{activeBooking.property?.city || activeBooking.city}</p>
+                        </div>
+                      </div>
+
+                      {/* Details Side */}
+                      <div className="lg:col-span-7 p-6 lg:p-8 flex flex-col justify-between">
+                        <div className="flex justify-between items-start mb-8">
+                          <div>
+                            <h3 className="font-serif text-3xl md:text-4xl text-charcoal mb-2">{activeBooking.property?.property_description || activeBooking.property?.room_description || 'Your Residence'}</h3>
+                            <div className="flex items-center gap-2 text-charcoal/60 text-sm">
+                              <MapPin className="w-4 h-4" />
+                              {activeBooking.property?.city || activeBooking.city}, India
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-charcoal/40 mb-1">Monthly Rent</p>
+                            <p className="font-sans text-3xl text-charcoal">₹{(activeBooking.property?.average_rent ?? 0).toLocaleString()}</p>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-6 mb-8 py-8 border-y border-charcoal/5">
+                          <div>
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-charcoal/40 mb-2 flex items-center gap-1"><Calendar className="w-3 h-3" /> Start Date</p>
+                            <p className="font-mono text-sm text-charcoal">{activeBooking.start_date}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-charcoal/40 mb-2 flex items-center gap-1"><Clock className="w-3 h-3" /> End Date</p>
+                            <p className="font-mono text-sm text-charcoal">{activeBooking.end_date}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-charcoal/40 mb-2 flex items-center gap-1"><FileText className="w-3 h-3" /> Residence Id</p>
+                            <p className="font-mono text-sm text-charcoal">{activeBooking.booking_id}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-4">
+                          <button className="flex-1 bg-charcoal text-white py-4 rounded-xl font-sans text-xs uppercase tracking-widest font-bold hover:bg-black transition-colors">
+                            Extend Lease
+                          </button>
+                          <button className="flex-1 border border-charcoal/20 text-charcoal py-4 rounded-xl font-sans text-xs uppercase tracking-widest font-bold hover:bg-charcoal/5 transition-colors">
+                            Cancel Lease
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-8 text-center">No active bookings</div>
+                  )}
                 </div>
-
-                {/* Details Side */}
-                <div className="lg:col-span-7 p-6 lg:p-8 flex flex-col justify-between">
-                   <div className="flex justify-between items-start mb-8">
-                      <div>
-                         <h3 className="font-serif text-3xl md:text-4xl text-charcoal mb-2">{mockDbData.activeBooking.propertyType}</h3>
-                         <div className="flex items-center gap-2 text-charcoal/60 text-sm">
-                            <MapPin className="w-4 h-4" />
-                            {mockDbData.activeBooking.city}, India
-                         </div>
-                      </div>
-                      <div className="text-right">
-                         <p className="text-[10px] font-bold uppercase tracking-widest text-charcoal/40 mb-1">Monthly Rent</p>
-                         <p className="font-sans text-3xl text-charcoal">₹{mockDbData.activeBooking.rentPerMonth.toLocaleString()}</p>
-                      </div>
-                   </div>
-
-                   <div className="grid grid-cols-2 md:grid-cols-3 gap-6 mb-8 py-8 border-y border-charcoal/5">
-                      <div>
-                         <p className="text-[10px] font-bold uppercase tracking-widest text-charcoal/40 mb-2 flex items-center gap-1"><Calendar className="w-3 h-3" /> Start Date</p>
-                         <p className="font-mono text-sm text-charcoal">{mockDbData.activeBooking.startDate}</p>
-                      </div>
-                      <div>
-                         <p className="text-[10px] font-bold uppercase tracking-widest text-charcoal/40 mb-2 flex items-center gap-1"><Clock className="w-3 h-3" /> End Date</p>
-                         <p className="font-mono text-sm text-charcoal">{mockDbData.activeBooking.endDate}</p>
-                      </div>
-                      <div>
-                         <p className="text-[10px] font-bold uppercase tracking-widest text-charcoal/40 mb-2 flex items-center gap-1"><FileText className="w-3 h-3" /> Residence Id</p>
-                         <p className="font-mono text-sm text-charcoal">{mockDbData.activeBooking.id}</p>
-                      </div>
-                   </div>
-
-                   <div className="flex gap-4">
-                      <button className="flex-1 bg-charcoal text-white py-4 rounded-xl font-sans text-xs uppercase tracking-widest font-bold hover:bg-black transition-colors">
-                         Extend Lease
-                      </button>
-                      <button className="flex-1 border border-charcoal/20 text-charcoal py-4 rounded-xl font-sans text-xs uppercase tracking-widest font-bold hover:bg-charcoal/5 transition-colors">
-                         Cancel Lease
-                      </button>
-                   </div>
-                </div>
-
-              </div>
-            </div>
           </motion.div>
 
           {/* Section 2: Past Bookings & History */}
@@ -177,66 +237,65 @@ export default function Dashboard() {
             
             <div className="bg-white rounded-[2.5rem] p-8 shadow-xl shadow-charcoal/5 border border-charcoal/5">
               <div className="space-y-8">
-                {mockDbData.bookingHistory.map((booking, index) => {
-                  const review = mockDbData.myReviews.find(r => r.bookingId === booking.id);
-                  
-                  return (
-                    <div key={index} className="group">
-                      <div className="flex flex-col md:flex-row gap-8 items-start">
-                        
-                        {/* Date Column */}
-                        <div className="md:w-48 shrink-0">
-                           <span className="text-[10px] font-bold uppercase tracking-widest text-charcoal/40 block mb-1">Period</span>
-                           <div className="font-mono text-xs text-charcoal/80">
-                              {booking.startDate} <br/>
+                {loading ? (
+                  <div className="p-8 text-center">Loading history…</div>
+                ) : bookingHistory.length === 0 ? (
+                  <div className="p-8 text-center">No past bookings</div>
+                ) : (
+                  bookingHistory.map((booking, index) => {
+                    const review = myReviews.find((r) => r.bookingId === booking.booking_id || r.bookingId === booking.booking_id);
+                    return (
+                      <div key={index} className="group">
+                        <div className="flex flex-col md:flex-row gap-8 items-start">
+                          <div className="md:w-48 shrink-0">
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-charcoal/40 block mb-1">Period</span>
+                            <div className="font-mono text-xs text-charcoal/80">
+                              {booking.start_date} <br/>
                               <span className="text-charcoal/30">↓</span> <br/>
-                              {booking.endDate}
-                           </div>
-                        </div>
+                              {booking.end_date}
+                            </div>
+                          </div>
 
-                        {/* Property Info */}
-                        <div className="flex-1">
-                           <div className="flex items-baseline gap-3 mb-2">
-                              <h3 className="font-serif text-xl text-charcoal group-hover:text-gold transition-colors">{booking.propertyType}</h3>
-                              <span className="text-[10px] font-bold uppercase tracking-widest text-charcoal/40">{booking.city}</span>
-                           </div>
-                           <p className="text-sm text-charcoal/60 mb-4">Unit {booking.roomNumber} • {booking.id}</p>
-                           
-                           {/* Review Status */}
-                           {review ? (
+                          <div className="flex-1">
+                            <div className="flex items-baseline gap-3 mb-2">
+                              <h3 className="font-serif text-xl text-charcoal group-hover:text-gold transition-colors">{booking.property?.property_description || 'Property'}</h3>
+                              <span className="text-[10px] font-bold uppercase tracking-widest text-charcoal/40">{booking.property?.city || ''}</span>
+                            </div>
+                            <p className="text-sm text-charcoal/60 mb-4">Unit {booking.room_number || booking.room_number} • {booking.booking_id}</p>
+
+                            {review ? (
                               <div className="bg-bone rounded-xl p-4 border border-charcoal/5 inline-block max-w-xl">
-                                 <div className="flex items-center gap-2 mb-2">
-                                    <div className="flex gap-0.5">
-                                       {[...Array(5)].map((_, i) => (
-                                          <Star key={i} className={`w-3 h-3 ${i < review.rating ? 'text-gold fill-gold' : 'text-charcoal/20'}`} />
-                                       ))}
-                                    </div>
-                                    <span className="text-[10px] font-bold uppercase tracking-widest text-charcoal/40">Your Review</span>
-                                 </div>
-                                 <p className="text-sm text-charcoal/80 italic">"{review.reviewText}"</p>
+                                <div className="flex items-center gap-2 mb-2">
+                                  <div className="flex gap-0.5">
+                                    {[...Array(5)].map((_, i) => (
+                                      <Star key={i} className={`w-3 h-3 ${i < (review.rating || 0) ? 'text-gold fill-gold' : 'text-charcoal/20'}`} />
+                                    ))}
+                                  </div>
+                                  <span className="text-[10px] font-bold uppercase tracking-widest text-charcoal/40">Your Review</span>
+                                </div>
+                                <p className="text-sm text-charcoal/80 italic">"{review.reviewText}"</p>
                               </div>
-                           ) : (
+                            ) : (
                               <button className="text-[10px] font-bold uppercase tracking-widest text-charcoal/40 hover:text-charcoal border border-dashed border-charcoal/20 px-4 py-3 rounded-xl hover:border-charcoal/40 hover:bg-white transition-all flex items-center gap-2">
-                                 <MessageSquarePlus className="w-4 h-4" /> Write a Review
+                                <MessageSquarePlus className="w-4 h-4" /> Write a Review
                               </button>
-                           )}
-                        </div>
+                            )}
+                          </div>
 
-                        {/* Action */}
-                        <div className="shrink-0">
-                           <button className="p-3 rounded-full border border-charcoal/10 text-charcoal/40 hover:text-charcoal hover:border-charcoal transition-colors">
+                          <div className="shrink-0">
+                            <button className="p-3 rounded-full border border-charcoal/10 text-charcoal/40 hover:text-charcoal hover:border-charcoal transition-colors">
                               <ArrowRight className="w-4 h-4" />
-                           </button>
+                            </button>
+                          </div>
                         </div>
 
+                        {index !== bookingHistory.length - 1 && (
+                          <div className="h-px w-full bg-charcoal/5 my-8" />
+                        )}
                       </div>
-                      
-                      {index !== mockDbData.bookingHistory.length - 1 && (
-                        <div className="h-px w-full bg-charcoal/5 my-8" />
-                      )}
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
               </div>
             </div>
           </motion.div>

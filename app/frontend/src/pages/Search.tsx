@@ -42,6 +42,10 @@ export default function Search() {
   const [isReset, setIsReset] = useState(false);
   const [resetKey, setResetKey] = useState(0);
   const [properties, setProperties] = useState<FrontProp[]>(initialProps);
+  const [searchQuery, setSearchQuery] = useState<string>(isReset ? "" : "");
+  const [filterType, setFilterType] = useState<string | null>(null);
+  const [availableFrom, setAvailableFrom] = useState<string | null>(null);
+  const [availableTo, setAvailableTo] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -61,12 +65,35 @@ export default function Search() {
     }
   }, [searchParams]);
 
-  // fetch properties from backend
+  // Initialize search state from URL query params when present
+  useEffect(() => {
+    const q = searchParams.get('q');
+    const pt = searchParams.get('property_type');
+    const af = searchParams.get('available_from');
+    const at = searchParams.get('available_to');
+    if (q || pt || af || at) {
+      setSearchQuery(q || '');
+      setFilterType(pt || null);
+      setAvailableFrom(af || null);
+      setAvailableTo(at || null);
+    }
+  }, [searchParams]);
+
+  // fetch properties from backend (reacts to search and filter params)
   useEffect(() => {
     let mounted = true;
     setLoading(true);
     setError(null);
-    apiFetch('/properties')
+    const q = (searchQuery || '').trim();
+    const params: string[] = [];
+    if (q) params.push(`q=${encodeURIComponent(q)}`);
+    if (filterType) params.push(`property_type=${encodeURIComponent(filterType)}`);
+    if (availableFrom && availableTo) {
+      params.push(`available_from=${encodeURIComponent(availableFrom)}`);
+      params.push(`available_to=${encodeURIComponent(availableTo)}`);
+    }
+    const qs = params.length ? `?${params.join('&')}` : '';
+    apiFetch(`/properties${qs}`)
       .then((rows: any[]) => {
         if (!mounted) return;
         const mapped = (rows || []).map((p: any) => ({
@@ -86,7 +113,7 @@ export default function Search() {
       })
       .finally(() => setLoading(false));
     return () => { mounted = false; };
-  }, []);
+  }, [searchQuery, filterType, availableFrom, availableTo]);
 
   const handleReset = () => {
     setIsReset(true);
@@ -94,43 +121,89 @@ export default function Search() {
     setPriceRange({ min: 0, max: 100000 });
     setMinRating(0);
     setSortOption('newest');
+    setSearchQuery('');
+  };
+
+  const handleSearch = (payload: any) => {
+    if (typeof payload === 'string') {
+      setSearchQuery(payload || '');
+      return;
+    }
+    setSearchQuery(payload.q || '');
+    setFilterType(payload.property_type || null);
+    setAvailableFrom(payload.available_from || null);
+    setAvailableTo(payload.available_to || null);
   };
 
   const filteredProperties = properties
-    .filter(p => 
-      p.price >= priceRange.min && 
-      p.price <= priceRange.max && 
-      p.rating >= minRating
-    )
+    .filter(p => {
+      const parseNum = (v: any) => {
+        if (v == null) return 0;
+        if (typeof v === 'number') return v;
+        if (typeof v === 'string') {
+          const cleaned = v.replace(/[,\s]/g, '');
+          const n = Number(cleaned);
+          return isNaN(n) ? 0 : n;
+        }
+        return 0;
+      };
+      const price = parseNum(p.price);
+      const rating = parseNum(p.rating);
+      return price >= priceRange.min && price <= priceRange.max && rating >= minRating;
+    })
+    .slice()
     .sort((a, b) => {
+      const parseNum = (v: any) => {
+        if (v == null) return 0;
+        if (typeof v === 'number') return v;
+        if (typeof v === 'string') {
+          const cleaned = v.replace(/[,\s]/g, '');
+          const n = Number(cleaned);
+          return isNaN(n) ? 0 : n;
+        }
+        return 0;
+      };
+      const aPrice = parseNum(a.price);
+      const bPrice = parseNum(b.price);
+      const aRating = parseNum(a.rating);
+      const bRating = parseNum(b.rating);
+
+      const compare = (x: number, y: number) => {
+        if (x < y) return -1;
+        if (x > y) return 1;
+        return 0;
+      };
+
       switch (sortOption) {
-        case 'price-asc': return a.price - b.price;
-        case 'price-desc': return b.price - a.price;
-        case 'rating-asc': return a.rating - b.rating;
-        case 'rating-desc': return b.rating - a.rating;
+        case 'price-asc': return compare(aPrice, bPrice);
+        case 'price-desc': return compare(bPrice, aPrice);
+        case 'rating-asc': return compare(aRating, bRating);
+        case 'rating-desc': return compare(bRating, aRating);
+        case 'newest': return compare(b.id, a.id);
         default: return 0;
       }
     });
+
+  // Debugging output to help trace disappearing items
+  // eslint-disable-next-line no-console
+  console.debug('Search debug', { sortOption, rawCount: properties.length, filteredCount: filteredProperties.length, properties, filteredProperties });
 
   return (
     <div className="pt-48 pb-20 px-4 md:px-12 min-h-screen">
       <SearchPill 
         isFixed={true} 
-        initialValue={isReset ? "" : "Bangalore"} 
-        placeholder="Add location" 
-        onReset={handleReset} 
+        initialValue={searchQuery || ''} 
+        placeholder="All locations" 
+        onReset={handleReset}
+        onSearch={handleSearch}
       />
       
       <div className="max-w-7xl mx-auto">
         <div className="flex justify-between items-end mb-8">
           <h1 className="font-serif text-3xl text-charcoal">
-            {isReset ? (
-              <span className="italic">All properties</span>
-            ) : (
-              <>
-                <span className="italic">{filteredProperties.length} properties</span> found in Bangalore
-              </>
-            )}
+            <>
+              <span className="italic">{filteredProperties.length} {filteredProperties.length === 1 ? 'property' : 'properties'}</span> found in {searchQuery && searchQuery.trim() ? searchQuery.trim() : 'All locations'}
+            </>
           </h1>
           <div className="flex gap-2 relative">
             {/* Filter Button & Dropdown */}

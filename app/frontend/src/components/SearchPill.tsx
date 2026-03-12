@@ -5,23 +5,37 @@ import { Search, MapPin, Calendar, Home, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 
+interface SearchParams {
+  q?: string;
+  property_type?: string | null;
+  available_from?: string | null;
+  available_to?: string | null;
+}
+
 interface SearchPillProps {
   isFixed?: boolean;
   className?: string;
   initialValue?: string;
   placeholder?: string;
   onReset?: () => void;
+  onSearch?: (params: SearchParams) => void;
+  editable?: boolean;
 }
 
 export default function SearchPill({ 
   isFixed = false, 
   className,
   initialValue = "",
-  placeholder = "Bangalore",
-  onReset
+  placeholder = "All locations",
+  onReset,
+  onSearch,
+  editable = false,
 }: SearchPillProps) {
   const navigate = useNavigate();
   const [value, setValue] = useState(initialValue);
+  const [propertyType, setPropertyType] = useState<string | null>(null);
+  const [availableFrom, setAvailableFrom] = useState<string | null>(null);
+  const [availableTo, setAvailableTo] = useState<string | null>(null);
 
   useEffect(() => {
     setValue(initialValue);
@@ -37,6 +51,21 @@ export default function SearchPill({
     e.stopPropagation();
     setValue("");
     if (onReset) onReset();
+  };
+
+  const handleSearch = (e?: React.MouseEvent | React.KeyboardEvent) => {
+    e && (e as any).stopPropagation();
+    const payload = { q: value || undefined, property_type: propertyType, available_from: availableFrom, available_to: availableTo };
+    if (onSearch) onSearch(payload);
+    if (!isFixed) {
+      const parts: string[] = [];
+      if (payload.q) parts.push(`q=${encodeURIComponent(payload.q)}`);
+      if (payload.property_type) parts.push(`property_type=${encodeURIComponent(payload.property_type)}`);
+      if (payload.available_from) parts.push(`available_from=${encodeURIComponent(payload.available_from)}`);
+      if (payload.available_to) parts.push(`available_to=${encodeURIComponent(payload.available_to)}`);
+      const qs = parts.length ? `?${parts.join('&')}` : '';
+      navigate(`/search${qs}`);
+    }
   };
 
   const SPRING_TRANSITION = {
@@ -84,9 +113,10 @@ export default function SearchPill({
               type="text" 
               value={value}
               onChange={(e) => setValue(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(e); }}
               placeholder={placeholder}
               className="text-sm font-medium outline-none placeholder:text-charcoal bg-transparent truncate min-w-[100px]" 
-              readOnly={!isFixed} 
+              readOnly={!(isFixed || editable)} 
             />
           </div>
         </motion.div>
@@ -111,12 +141,18 @@ export default function SearchPill({
               Dates
             </motion.span>
             <motion.span 
-              layoutId="search-pill-dates-value"
-              transition={SPRING_TRANSITION}
-              className="text-sm font-medium text-charcoal truncate"
-            >
-              Add dates
-            </motion.span>
+                layoutId="search-pill-dates-value"
+                transition={SPRING_TRANSITION}
+                className="text-sm font-medium text-charcoal truncate"
+              >
+                {availableFrom && availableTo ? `${availableFrom} → ${availableTo}` : 'Add dates'}
+              </motion.span>
+            {isFixed && (
+              <div className="ml-3 flex gap-2 items-center">
+                <input type="date" value={availableFrom || ''} onChange={(e) => setAvailableFrom(e.target.value || null)} className="text-xs" />
+                <input type="date" value={availableTo || ''} onChange={(e) => setAvailableTo(e.target.value || null)} className="text-xs" />
+              </div>
+            )}
           </div>
         </motion.div>
       </div>
@@ -144,8 +180,17 @@ export default function SearchPill({
               transition={SPRING_TRANSITION}
               className="text-sm font-medium text-charcoal truncate"
             >
-              All Types
+              {propertyType || 'All Types'}
             </motion.span>
+            {isFixed && (
+              <select value={propertyType || ''} onChange={(e) => setPropertyType(e.target.value || null)} className="ml-3 text-sm">
+                <option value="">All Types</option>
+                <option value="Guest House">Guest House</option>
+                <option value="Boys PG">Boys PG</option>
+                <option value="Girls PG">Girls PG</option>
+                <option value="Serviced Apartment">Serviced Apartment</option>
+              </select>
+            )}
           </div>
         </motion.div>
       </div>
@@ -160,6 +205,7 @@ export default function SearchPill({
             "rounded-full bg-charcoal text-white flex items-center justify-center hover:bg-black transition-colors shrink-0",
             isFixed ? "w-10 h-10" : "w-12 h-12"
           )}
+          onClick={(e) => { e.stopPropagation(); handleSearch(e); }}
         >
           <Search className="w-5 h-5" />
         </motion.button>

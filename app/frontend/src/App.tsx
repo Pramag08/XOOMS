@@ -10,6 +10,8 @@ import Footer from './components/Footer';
 import Home from './pages/Home';
 import Search from './pages/Search';
 import PropertyDetail from './pages/PropertyDetail';
+import BookingDetail from './pages/BookingDetail';
+import OwnerProperty from './pages/OwnerProperty';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import About from './pages/About';
@@ -55,6 +57,8 @@ function AppContent() {
         <Route path="/" element={<Home />} />
         <Route path="/search" element={<Search />} />
         <Route path="/property/:id" element={<PropertyDetail />} />
+        <Route path="/booking/:id" element={<BookingDetail />} />
+        <Route path="/owner/properties/:id" element={<OwnerProperty />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/my-properties" element={<MyProperties />} />
         <Route path="/my-properties/add" element={<AddProperty />} />

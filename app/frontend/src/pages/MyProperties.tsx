@@ -4,7 +4,9 @@ import {
   MapPin, Home, DollarSign, Calendar, ArrowLeft, ChevronDown, Star, X, ArrowUp, ArrowDown, CheckCircle
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect, Fragment } from 'react';
+import { apiFetch } from '@/lib/api';
+import { useAuth } from '../context/AuthContext';
 
 // Mock Data for User's Properties
 const initialProperties = [
@@ -78,7 +80,13 @@ const itemVariants = {
 };
 
 export default function MyProperties() {
-  const [properties, setProperties] = useState(initialProperties);
+  const { user } = useAuth();
+  const [properties, setProperties] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [bookingsMap, setBookingsMap] = useState<Record<string, any[]>>({});
+  const [expandedProps, setExpandedProps] = useState<Record<string, boolean>>({});
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isSortOpen, setIsSortOpen] = useState(false);
   
@@ -105,6 +113,59 @@ export default function MyProperties() {
         default: return 0;
       }
     });
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        // only attempt when user is present
+        if (!user) {
+          if (mounted) setProperties([]);
+          return;
+        }
+        const ownerProps: any[] = await apiFetch('/owner/properties').catch(() => []);
+        if (!mounted) return;
+        // map backend shape to UI shape expected by table
+        const mapped = (ownerProps || []).map((p: any) => ({
+          id: p.property_id ?? `P-${Math.random().toString(36).slice(2,8)}`,
+          name: p.property_description || 'Property',
+          location: p.city || '',
+          type: p.property_type || '',
+          price: p.average_rent ?? 0,
+          status: p.availability_text || (p.is_full ? 'Rented' : 'Active') || (p.verification_status || 'Active'),
+          listedDate: p.next_available || '-',
+          views: 0,
+          rating: p.average_rating ?? 0,
+          reviews: 0,
+          raw: p,
+        }));
+        setProperties(mapped);
+        // fetch owner bookings once and group by property_id
+        try {
+          const ownerBookings: any[] = await apiFetch('/owner/bookings').catch(() => []);
+          const grouped: Record<string, any[]> = {};
+          (ownerBookings || []).forEach((b: any) => {
+            const pid = String(b.property_id || '');
+            if (!grouped[pid]) grouped[pid] = [];
+            grouped[pid].push(b);
+          });
+          if (mounted) setBookingsMap(grouped);
+        } catch (e) {
+          // ignore booking fetch errors for now
+        }
+      } catch (err) {
+        if (mounted) setError((err as any)?.message || 'Failed to load properties');
+      }
+      if (mounted) setLoading(false);
+    })();
+    return () => { mounted = false; };
+  }, [user]);
+
+  const toggleExpand = (propId: string) => {
+    setExpandedProps(prev => ({ ...prev, [propId]: !prev[propId] }));
+  };
 
   return (
     <div className="min-h-screen bg-bone pt-32 pb-20 px-4 md:px-12">
@@ -281,6 +342,13 @@ export default function MyProperties() {
         </motion.div>
 
         {/* Properties Table */}
+        {loading ? (
+          <div className="bg-white rounded-3xl shadow-xl shadow-charcoal/5 border border-charcoal/5 p-12 text-center">Loading properties…</div>
+        ) : !user ? (
+          <div className="bg-white rounded-3xl shadow-xl shadow-charcoal/5 border border-charcoal/5 p-12 text-center">Please <Link to="/login" className="underline">log in</Link> to manage your properties.</div>
+        ) : properties.length === 0 ? (
+          <div className="bg-white rounded-3xl shadow-xl shadow-charcoal/5 border border-charcoal/5 p-12 text-center">No properties found.</div>
+        ) : (
         <motion.div 
           variants={containerVariants}
           initial="hidden"
@@ -302,8 +370,8 @@ export default function MyProperties() {
               </thead>
               <tbody>
                 {filteredProperties.map((property, index) => (
+                  <Fragment key={property.id}>
                   <motion.tr 
-                    key={property.id}
                     variants={itemVariants}
                     className="group hover:bg-bone/30 transition-colors border-b border-charcoal/5 last:border-0"
                   >
@@ -366,17 +434,41 @@ export default function MyProperties() {
                     
                     <td className="py-6 px-8 text-right">
                       <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button 
-                          className="p-2 rounded-full hover:bg-charcoal/5 text-charcoal/40 hover:text-charcoal transition-colors"
-                          title="Edit Property"
-                        >
+                        <Link to={`/owner/properties/${property.raw?.property_id || property.id}`} title="Manage Property" className="p-2 rounded-full hover:bg-charcoal/5 text-charcoal/40 hover:text-charcoal transition-colors">
                           <Edit2 className="w-4 h-4" />
+                        </Link>
+                        <button
+                          onClick={() => toggleExpand(String(property.raw?.property_id || property.id))}
+                          title="Show bookings"
+                          className="p-2 rounded-full hover:bg-charcoal/5 text-charcoal/40 hover:text-charcoal transition-colors"
+                        >
+                          <ChevronDown className={`w-4 h-4 transition-transform ${expandedProps[String(property.raw?.property_id || property.id)] ? 'rotate-180' : ''}`} />
                         </button>
                         <button 
+                          onClick={async () => {
+                            const confirmDel = window.confirm('Delete this property? This action cannot be undone.');
+                            if (!confirmDel) return;
+                            const propId = property.raw?.property_id;
+                            if (!propId) { alert('Unable to determine property id'); return; }
+                            // only admins can delete via API; owners cannot delete properties in backend
+                            if (!(user && (user as any).role && String((user as any).role).toLowerCase() === 'admin')) {
+                              alert('Only admins can delete properties. Please contact an administrator.');
+                              return;
+                            }
+                            try {
+                              setDeletingId(propId);
+                              await apiFetch(`/admin/properties/${propId}`, { method: 'DELETE' });
+                              setProperties(prev => prev.filter(p => p.raw?.property_id !== propId));
+                            } catch (err: any) {
+                              alert(err?.message || 'Failed to delete property');
+                            } finally {
+                              setDeletingId(null);
+                            }
+                          }}
                           className="p-2 rounded-full hover:bg-red-50 text-charcoal/40 hover:text-red-500 transition-colors"
                           title="Delete Property"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          {deletingId === property.raw?.property_id ? <span className="text-xs">Deleting…</span> : <Trash2 className="w-4 h-4" />}
                         </button>
                         <button 
                           className="p-2 rounded-full hover:bg-charcoal/5 text-charcoal/40 hover:text-charcoal transition-colors"
@@ -387,6 +479,34 @@ export default function MyProperties() {
                       </div>
                     </td>
                   </motion.tr>
+                  {expandedProps[String(property.raw?.property_id || property.id)] && (
+                    <tr className="bg-bone/30 border-b border-charcoal/5">
+                      <td colSpan={7} className="py-4 px-8">
+                        <div className="space-y-3">
+                          <h4 className="font-bold text-sm text-charcoal">Bookings</h4>
+                          {(bookingsMap[String(property.raw?.property_id || property.id)] || []).length === 0 ? (
+                            <div className="text-sm text-charcoal/60">No bookings for this property.</div>
+                          ) : (
+                            <div className="space-y-2">
+                              {(bookingsMap[String(property.raw?.property_id || property.id)] || []).map((b) => (
+                                <div key={b.booking_id} className="flex items-center justify-between bg-white/60 p-3 rounded-lg border border-charcoal/5">
+                                  <div className="min-w-0">
+                                    <div className="text-sm font-medium text-charcoal">Room: {b.room_number || b.room_id}</div>
+                                    <div className="text-xs text-charcoal/60">Guest: {b.customer_name || b.customer_id} • {b.booking_status}</div>
+                                    <div className="text-xs text-charcoal/40">{b.start_date} → {b.end_date}</div>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Link to={`/booking/${b.booking_id}`} className="px-3 py-1 rounded-lg text-xs border border-charcoal/10">View</Link>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
@@ -404,6 +524,7 @@ export default function MyProperties() {
             </div>
           </div>
         </motion.div>
+        )}
 
       </div>
     </div>
