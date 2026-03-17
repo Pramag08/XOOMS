@@ -344,6 +344,12 @@ def create_booking_for_property(property_id: int, payload: BookingCreate, curren
         if not room or room.property_id != property_id:
             raise HTTPException(status_code=404, detail="Room not found for this property")
 
+        # Enforce property verification at application layer to provide clearer errors
+        # The DB also enforces this via a trigger; check here and return a friendly 403 instead of an InternalError.
+        prop_verif = getattr(prop, 'verification_status', None)
+        if not prop_verif or str(prop_verif).lower() != 'verified':
+            raise HTTPException(status_code=403, detail=f"Cannot book room {payload.room_id}, property is not verified")
+
         # get customer
         from .customers import get_customer_by_user
         cust = get_customer_by_user(session, current_user.user_id)

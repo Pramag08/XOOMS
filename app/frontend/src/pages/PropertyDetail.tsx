@@ -136,6 +136,14 @@ export default function PropertyDetail() {
   if (error) return <div className="pt-32 text-center text-red-600">{error}</div>;
   if (!data) return <div className="pt-32 text-center">Property not found</div>;
 
+  // determine verified status (robust to different backend shapes)
+  const verification_status = (data as any)?.verification_status ?? (data as any)?.status ?? null;
+  const verified = !!(
+    (typeof verification_status === 'string' && /verif/i.test(verification_status)) ||
+    (data as any)?.is_verified === true ||
+    (data as any)?.verified === true
+  );
+
   // Local sample images
   const localImages = ['/images/unsplash1.jpg','/images/unsplash2.jpg','/images/unsplash3.jpg','/images/unsplash4.jpg','/images/unsplash5.jpg'];
   // Unsplash hotlink fallbacks (user-provided IDs)
@@ -252,7 +260,12 @@ export default function PropertyDetail() {
             {/* Title & Actions */}
             <div className="flex justify-between items-start">
               <div>
-                <h1 className="font-serif text-3xl md:text-5xl text-charcoal mb-2">{data.property_description}</h1>
+                <div className="flex items-start gap-4">
+                  <h1 className="font-serif text-3xl md:text-5xl text-charcoal mb-2">{data.property_description}</h1>
+                  <span className={`mt-2 text-[11px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${verified ? 'bg-green-50 text-green-600 border border-green-100' : 'bg-charcoal/5 text-charcoal/60 border border-charcoal/10'}`}>
+                    {verified ? 'Verified' : 'Unverified'}
+                  </span>
+                </div>
                 <p className="font-sans text-charcoal/60 flex items-center gap-2">
                   <MapPin className="w-4 h-4 text-charcoal/40" />
                   {data.city || data.address}
@@ -310,6 +323,7 @@ export default function PropertyDetail() {
 
                 {/* Booking form for customers */}
                 {data.rooms && data.rooms.length > 0 ? (
+                  verified ? (
                   <div className="space-y-4 mb-4">
                     <label className="text-xs text-charcoal/60">Select room</label>
                     <select className="w-full p-3 border rounded" value={selectedRoom ?? ''} onChange={(e) => setSelectedRoom(e.target.value ? Number(e.target.value) : null)}>
@@ -348,6 +362,12 @@ export default function PropertyDetail() {
 
                     {bookingStatus && <div className="text-xs text-charcoal/60 mt-2">{bookingStatus}</div>}
                   </div>
+                  ) : (
+                    <div className="space-y-4 mb-4">
+                      <div className="text-sm text-charcoal/60">This property is not verified yet. Booking is disabled until the listing is verified by the platform.</div>
+                      <button className="w-full border border-charcoal text-charcoal py-3 rounded-xl font-sans text-sm font-bold bg-charcoal/5 cursor-not-allowed" disabled>Booking Disabled</button>
+                    </div>
+                  )
                 ) : (
                   <button className="w-full border border-charcoal text-charcoal py-4 rounded-xl font-sans text-xs uppercase tracking-widest font-bold hover:bg-charcoal/5 transition-colors mb-3">
                     Contact Owner

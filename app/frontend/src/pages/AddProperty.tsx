@@ -20,7 +20,7 @@ const facilitiesList = [
   { id: 'gym', label: 'Gym Access', icon: Dumbbell },
 ];
 
-const propertyTypes = ['Apartment', 'Villa', 'Studio', 'Penthouse', 'Condo'];
+const propertyTypes = ['Guest House', 'Boys PG', 'Girls PG', 'Serviced Apartment'];
 
 export default function AddProperty() {
   const [selectedFacilities, setSelectedFacilities] = useState<string[]>([]);

@@ -128,19 +128,29 @@ export default function MyProperties() {
         const ownerProps: any[] = await apiFetch('/owner/properties').catch(() => []);
         if (!mounted) return;
         // map backend shape to UI shape expected by table
-        const mapped = (ownerProps || []).map((p: any) => ({
-          id: p.property_id ?? `P-${Math.random().toString(36).slice(2,8)}`,
-          name: p.property_description || 'Property',
-          location: p.city || '',
-          type: p.property_type || '',
-          price: p.average_rent ?? 0,
-          status: p.availability_text || (p.is_full ? 'Rented' : 'Active') || (p.verification_status || 'Active'),
-          listedDate: p.next_available || '-',
-          views: 0,
-          rating: p.average_rating ?? 0,
-          reviews: 0,
-          raw: p,
-        }));
+        const mapped = (ownerProps || []).map((p: any) => {
+          const verStatus = p.verification_status ?? p.status ?? null;
+          const verified = !!(
+            (typeof verStatus === 'string' && /verif/i.test(verStatus)) ||
+            p.is_verified === true ||
+            p.verified === true
+          );
+          return ({
+            id: p.property_id ?? `P-${Math.random().toString(36).slice(2,8)}`,
+            name: p.property_description || 'Property',
+            location: p.city || '',
+            type: p.property_type || '',
+            price: p.average_rent ?? 0,
+            status: p.availability_text || (p.is_full ? 'Rented' : 'Active') || (verStatus || 'Active'),
+            listedDate: p.next_available || '-',
+            views: 0,
+            rating: p.average_rating ?? 0,
+            reviews: 0,
+            verification_status: verStatus,
+            verified,
+            raw: p,
+          });
+        });
         setProperties(mapped);
         // fetch owner bookings once and group by property_id
         try {
@@ -373,11 +383,16 @@ export default function MyProperties() {
                   <Fragment key={property.id}>
                   <motion.tr 
                     variants={itemVariants}
-                    className="group hover:bg-bone/30 transition-colors border-b border-charcoal/5 last:border-0"
+                    className={`group hover:bg-bone/30 transition-colors border-b border-charcoal/5 last:border-0 ${property.verified ? '' : 'opacity-70 grayscale'}`}
                   >
                     <td className="py-6 px-8">
                       <div>
-                        <h3 className="font-serif text-lg text-charcoal group-hover:text-gold transition-colors">{property.name}</h3>
+                        <div className="flex items-center gap-3">
+                          <h3 className="font-serif text-lg text-charcoal group-hover:text-gold transition-colors">{property.name}</h3>
+                          <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${property.verified ? 'bg-green-50 text-green-600 border border-green-100' : 'bg-charcoal/5 text-charcoal/60 border border-charcoal/10'}`}>
+                            {property.verified ? 'Verified' : 'Unverified'}
+                          </span>
+                        </div>
                         <div className="flex items-center gap-2 text-charcoal/40 mt-1">
                           <MapPin className="w-3 h-3" />
                           <span className="text-xs font-sans">{property.location}</span>
