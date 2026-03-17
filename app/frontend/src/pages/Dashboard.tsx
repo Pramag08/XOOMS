@@ -117,9 +117,33 @@ export default function Dashboard() {
 
         setActiveBooking(activeList);
         setBookingHistory(history);
-        // reviews can be read from property details' reviews or left empty for now
-        const reviews: any[] = [];
-        setMyReviews(reviews);
+
+        // Attempt to detect existing reviews for past bookings by this user
+        try {
+          const reviewerName = customerData.fullName || '';
+          const detectedReviews: any[] = [];
+          // fetch reviews per property in parallel
+          await Promise.all(history.map(async (hb) => {
+            try {
+              if (!hb.property || !hb.property.property_id) return;
+              const revs: any[] = await apiFetch(`/properties/${hb.property.property_id}/reviews`).catch(() => []);
+              const mine = (revs || []).find(r => (r.reviewer_name || '') === reviewerName);
+              if (mine) {
+                detectedReviews.push({ bookingId: hb.booking_id, city: hb.property?.city, rating: mine.rating, reviewText: mine.review_text, reviewDate: mine.review_date ? String(mine.review_date).split('T')[0] : null });
+              }
+            } catch (e) {
+              // ignore per-property errors
+            }
+          }));
+
+          // mark bookingHistory entries that have reviews
+          const updatedHistory = history.map(hb => ({ ...hb, has_review: detectedReviews.some(r => r.bookingId === hb.booking_id) }));
+          setBookingHistory(updatedHistory);
+          setMyReviews(detectedReviews);
+        } catch (e) {
+          // ignore review discovery errors
+          setMyReviews([]);
+        }
       } catch (err: any) {
         setError(err?.message || 'Failed to load dashboard');
       } finally {
@@ -279,9 +303,28 @@ export default function Dashboard() {
                       const pid = reviewBooking.property?.property_id;
                       if (!pid) throw new Error('Property not available');
                       const payload = { rating: reviewRating, review_text: reviewText };
-                      await apiFetch(`/properties/${pid}/reviews`, { method: 'POST', body: JSON.stringify(payload) });
-                      // append to local reviews list
-                      setMyReviews((prev) => [{ bookingId: reviewBooking.booking_id, city: reviewBooking.property?.city, rating: reviewRating, reviewText: reviewText, reviewDate: (new Date()).toISOString().split('T')[0] }, ...prev]);
+                      // create review
+                      const created: any = await apiFetch(`/properties/${pid}/reviews`, { method: 'POST', body: JSON.stringify(payload) });
+
+                      // refresh reviews for this property to pick up reviewer_name and date
+                      const allRevs: any[] = await apiFetch(`/properties/${pid}/reviews`).catch(() => []);
+                      const reviewerName = (user as any)?.fullName || '';
+                      const mine = (allRevs || []).find(r => (r.reviewer_name || '') === reviewerName) || created;
+
+                      const reviewEntry = {
+                        bookingId: reviewBooking.booking_id,
+                        city: reviewBooking.property?.city,
+                        rating: mine?.rating || reviewRating,
+                        reviewText: mine?.review_text || reviewText,
+                        reviewDate: mine?.review_date ? String(mine.review_date).split('T')[0] : (new Date()).toISOString().split('T')[0]
+                      };
+
+                      // prepend to local reviews list
+                      setMyReviews((prev) => [reviewEntry, ...prev]);
+
+                      // mark booking as reviewed in bookingHistory
+                      setBookingHistory((prev) => prev.map(b => b.booking_id === reviewBooking.booking_id ? { ...b, has_review: true } : b));
+
                       setShowReviewModal(false);
                       setReviewBooking(null);
                     } catch (err: any) {
