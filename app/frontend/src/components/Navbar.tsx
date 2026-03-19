@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import { User, Globe, LogOut } from 'lucide-react';
+import { User, LogOut } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
@@ -47,13 +47,6 @@ export default function Navbar() {
       {/* Right: CTA & User */}
       <div className="flex-1 flex justify-end items-center gap-6">
         <div className="flex items-center gap-4">
-          <button 
-            className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-wider hover:bg-charcoal/5 px-3 py-2 rounded-full transition-colors"
-          >
-            <Globe className="w-3 h-3" />
-            <span>USD</span>
-          </button>
-          
           {user ? (
             <div className="flex items-center gap-2">
               <Link to={user?.role === "Admin" ? "/admin-dashboard" : "/dashboard"}>

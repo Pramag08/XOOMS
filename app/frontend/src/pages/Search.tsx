@@ -314,8 +314,16 @@ export default function Search() {
                     <div className="mt-6">
                       <label className="text-[10px] font-bold uppercase tracking-widest text-charcoal/40 mb-3 block">Verification</label>
                       <div className="flex items-center gap-3">
-                        <input id="onlyVerified" type="checkbox" checked={onlyVerified} onChange={(e) => setOnlyVerified(e.target.checked)} className="w-4 h-4" />
-                        <label htmlFor="onlyVerified" className="text-sm text-charcoal">Show only verified listings</label>
+                        <input
+                          id="onlyVerified"
+                          type="checkbox"
+                          checked={onlyVerified}
+                          onChange={(e) => setOnlyVerified(e.target.checked)}
+                          className="w-4 h-4 rounded border-charcoal/20 accent-charcoal"
+                        />
+                        <label htmlFor="onlyVerified" className="text-[11px] font-semibold uppercase tracking-[0.14em] text-charcoal/75">
+                          Show only verified listings
+                        </label>
                       </div>
                     </div>
                   </motion.div>

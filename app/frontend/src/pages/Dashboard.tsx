@@ -278,7 +278,10 @@ export default function Dashboard() {
                   ))}
                 </div>
               ) : (
-                <div className="p-8 text-center">No active bookings</div>
+                <div className="p-8 text-center">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-charcoal/40">Current Status</p>
+                  <p className="mt-2 font-serif text-lg text-charcoal/70">No active bookings</p>
+                </div>
               )}
             </div>
           </motion.div>
@@ -351,7 +354,10 @@ export default function Dashboard() {
                 {loading ? (
                   <div className="p-8 text-center">Loading history…</div>
                 ) : bookingHistory.length === 0 ? (
-                  <div className="p-8 text-center">No past bookings</div>
+                  <div className="p-8 text-center">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-charcoal/40">Booking History</p>
+                    <p className="mt-2 font-serif text-lg text-charcoal/70">No past bookings</p>
+                  </div>
                 ) : (
                   bookingHistory.map((booking, index) => {
                     const review = myReviews.find((r) => r.bookingId === booking.booking_id || r.bookingId === booking.booking_id);
