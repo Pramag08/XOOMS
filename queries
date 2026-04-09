@@ -110,7 +110,7 @@ SELECT
     r.review_date
 FROM review r
 JOIN customers c ON r.customer_id = c.customer_id
-WHERE r.property_id = $1
+WHERE r.property_id = 4001
 ORDER BY r.review_date DESC;
 
 
@@ -174,3 +174,85 @@ WHERE EXISTS (
       AND r.is_active = TRUE
       AND r.is_booked = FALSE
 );
+
+
+TRANSACTIONS
+
+BEGIN;
+
+-- Step 1: Create customer profile (after signup in auth_db)
+INSERT INTO customers (user_id, full_name, email)
+VALUES (101, 'Vaibhav Sahni', 'vaibhav@example.com')
+RETURNING customer_id;
+
+-- Assume returned customer_id = 1
+
+-- Step 2: Create owner entry
+INSERT INTO owner (customer_id)
+VALUES (1)
+RETURNING owner_id;
+
+-- Assume owner_id = 1
+
+-- Step 3: Verify owner (admin action simulated here)
+UPDATE owner
+SET verification_status = 'Verified'
+WHERE owner_id = 1;
+
+-- Step 4: Create property (trigger enforces owner is verified)
+INSERT INTO property (
+  owner_id,
+  property_description,
+  room_description,
+  property_type,
+  city,
+  address,
+  google_maps_link,
+  verification_status
+)
+VALUES (
+  1,
+  'Premium PG near metro',
+  'Fully furnished AC rooms',
+  'Boys PG',
+  'Delhi',
+  'Sector 15, Rohini',
+  'https://maps.example.com/pg1',
+  'Verified'
+)
+RETURNING property_id;
+
+COMMIT;
+
+
+BEGIN;
+
+-- Step 1: Insert booking
+INSERT INTO booking (
+  customer_id,
+  room_id,
+  start_date,
+  end_date,
+  booking_status
+)
+VALUES (
+  1,              -- existing customer
+  10,             -- existing room
+  '2026-04-10',
+  '2026-05-10',
+  'Active'
+);
+
+-- Step 2: (Optional) Immediately check booking status
+SELECT booking_id, room_id, booking_status
+FROM booking
+WHERE customer_id = 1
+ORDER BY created_at DESC
+LIMIT 1;
+
+-- Step 3: Check room availability flag (trigger updated)
+SELECT room_id, is_booked
+FROM room
+WHERE room_id = 10;
+
+COMMIT;
