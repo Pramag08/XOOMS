@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { apiFetch } from '@/lib/api';
+import { useAuth } from '../context/AuthContext';
+import { CheckCircle, X } from 'lucide-react';
 
 export default function OwnerProperty() {
   const { id } = useParams();
@@ -105,8 +107,26 @@ export default function OwnerProperty() {
     <div className="min-h-screen bg-bone pt-32 pb-20 px-4 md:px-12">
       <div className="max-w-4xl mx-auto bg-white rounded-2xl p-8 shadow-sm">
         <Link to="/my-properties" className="text-sm text-charcoal/60 underline">Back to My Properties</Link>
-        <h1 className="font-serif text-2xl text-charcoal mt-4 mb-2">Manage Property</h1>
-        <p className="text-sm text-charcoal/60 mb-6">{property?.property_description || 'Property'} — {property?.city || ''}</p>
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h1 className="font-serif text-2xl text-charcoal mt-4 mb-2">Manage Property</h1>
+            <p className="text-sm text-charcoal/60 mb-6">{property?.property_description || 'Property'} — {property?.city || ''}</p>
+          </div>
+          <div className="mt-4">
+            {/* owner verification badge */}
+            {(useAuth().user && (useAuth().user as any).role && String((useAuth().user as any).role).toLowerCase() === 'owner') ? (
+              ((useAuth().user as any).verificationStatus && /(verif)/i.test((useAuth().user as any).verificationStatus)) ? (
+                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-green-50 text-green-600 border border-green-100 font-bold text-sm">
+                  <CheckCircle className="w-4 h-4" /> Verified Owner
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-charcoal/5 text-charcoal/60 border border-charcoal/10 font-bold text-sm">
+                  <X className="w-4 h-4" /> Unverified Owner
+                </span>
+              )
+            ) : null}
+          </div>
+        </div>
 
         <section className="mb-8">
           <h3 className="font-bold mb-3">Rooms</h3>

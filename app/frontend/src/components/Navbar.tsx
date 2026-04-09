@@ -56,11 +56,11 @@ export default function Navbar() {
           
           {user ? (
             <div className="flex items-center gap-2">
-              <Link to="/dashboard">
-                <div 
-                  className="w-9 h-9 bg-charcoal text-white rounded-full flex items-center justify-center hover:bg-black transition-colors"
-                >
-                  <span className="text-xs font-bold">{user.fullName.charAt(0)}</span>
+              <Link to={user?.role === "Admin" ? "/admin-dashboard" : "/dashboard"}>
+                <div className="w-9 h-9 bg-charcoal text-white rounded-full flex items-center justify-center hover:bg-black transition-colors">
+                  <span className="text-xs font-bold">
+                    {user?.fullName?.charAt(0) || user?.email?.charAt(0)}
+                  </span>
                 </div>
               </Link>
               <button 

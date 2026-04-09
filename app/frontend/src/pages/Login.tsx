@@ -12,14 +12,21 @@ export default function Login() {
   const navigate = useNavigate();
 
   const handleLogin = async (e: FormEvent) => {
-    e.preventDefault();
-    try {
-      await login(email, password);
-      navigate('/dashboard');
-    } catch (err) {
-      alert('Login failed: ' + (err instanceof Error ? err.message : 'unknown'));
+  e.preventDefault();
+
+  try {
+    const loggedUser = await login(email, password);
+
+    if (loggedUser.role === "Admin") {
+      navigate("/admin-dashboard");
+    } else {
+      navigate("/dashboard");
     }
-  };
+
+  } catch (err) {
+    alert('Login failed: ' + (err instanceof Error ? err.message : 'unknown'));
+  }
+};
 
   return (
     <div className="min-h-screen bg-bone flex items-center justify-center p-4 md:p-8">

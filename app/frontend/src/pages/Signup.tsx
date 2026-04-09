@@ -1,10 +1,20 @@
 import { motion } from 'motion/react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, Eye, EyeOff, Mail, Lock, User } from 'lucide-react';
 import { useState } from 'react';
+import { apiFetch } from '@/lib/api';
+import { useAuth } from '../context/AuthContext';
 
 export default function Signup() {
   const [showPassword, setShowPassword] = useState(false);
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [role, setRole] = useState('User');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
+  const { setShowWelcome, setUser } = (useAuth() as any);
 
   return (
     <div className="min-h-screen bg-bone flex items-center justify-center p-4 md:p-8">
@@ -35,6 +45,31 @@ export default function Signup() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3, duration: 0.8 }}
               className="space-y-3"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setError(null);
+                if (!fullName || !email || !password) {
+                  setError('Please fill name, email and password');
+                  return;
+                }
+                setLoading(true);
+                try {
+                  const res: any = await apiFetch('/signup', { method: 'POST', body: JSON.stringify({ email, password, full_name: fullName, role }) });
+                  const token = res?.access_token;
+                  if (!token) throw new Error('No token returned');
+                  localStorage.setItem('sms_token', token);
+                  // fetch /me to populate context
+                  const me = await apiFetch('/me');
+                  const restoredUser = { fullName: (me as any).full_name || '', email: (me as any).email, role: (me as any).role };
+                  try { setUser(restoredUser); } catch {};
+                  try { setShowWelcome(true); setTimeout(() => setShowWelcome(false), 3000); } catch {}
+                  navigate('/dashboard');
+                } catch (err: any) {
+                  setError(err?.message || err?.body || 'Signup failed');
+                } finally {
+                  setLoading(false);
+                }
+              }}
             >
               <div className="space-y-1.5">
                 <label className="text-[10px] uppercase tracking-widest text-charcoal/50 font-bold">Full Name</label>
@@ -43,6 +78,8 @@ export default function Signup() {
                   <input 
                     type="text" 
                     placeholder="Enter your name" 
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
                     className="w-full bg-bone/30 border border-charcoal/10 rounded-xl py-3 pl-10 pr-4 text-sm text-charcoal placeholder:text-charcoal/30 outline-none focus:border-charcoal/30 focus:bg-bone/50 transition-all"
                   />
                 </div>
@@ -55,6 +92,8 @@ export default function Signup() {
                   <input 
                     type="email" 
                     placeholder="Enter your email" 
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     className="w-full bg-bone/30 border border-charcoal/10 rounded-xl py-3 pl-10 pr-4 text-sm text-charcoal placeholder:text-charcoal/30 outline-none focus:border-charcoal/30 focus:bg-bone/50 transition-all"
                   />
                 </div>
@@ -67,6 +106,8 @@ export default function Signup() {
                   <input 
                     type={showPassword ? "text" : "password"} 
                     placeholder="Create a password" 
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                     className="w-full bg-bone/30 border border-charcoal/10 rounded-xl py-3 pl-10 pr-10 text-sm text-charcoal placeholder:text-charcoal/30 outline-none focus:border-charcoal/30 focus:bg-bone/50 transition-all"
                   />
                   <button 
@@ -79,9 +120,16 @@ export default function Signup() {
                 </div>
               </div>
 
-              <button className="w-full bg-charcoal text-white py-3.5 rounded-xl font-sans text-xs uppercase tracking-widest font-bold hover:bg-black transition-all hover:scale-[1.01] active:scale-[0.99]">
-                Sign Up
-              </button>
+              <div className="flex items-center gap-3">
+                <select value={role} onChange={(e) => setRole(e.target.value)} className="p-3 rounded-xl border bg-bone text-sm">
+                  <option value="User">Customer</option>
+                  <option value="Owner">Owner</option>
+                </select>
+                <button disabled={loading} className="flex-1 bg-charcoal text-white py-3.5 rounded-xl font-sans text-xs uppercase tracking-widest font-bold hover:bg-black transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-60">
+                  {loading ? 'Creating…' : 'Sign Up'}
+                </button>
+              </div>
+              {error && <div className="text-sm text-red-600 mt-2">{error}</div>}
             </motion.form>
 
             <motion.div

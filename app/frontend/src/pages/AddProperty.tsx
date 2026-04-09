@@ -2,7 +2,7 @@ import { motion } from 'motion/react';
 import { 
   ArrowLeft, Upload, Image as ImageIcon, X, 
   Wifi, Monitor, Thermometer, Car, Shield, Sparkles, Coffee, Dumbbell,
-  DollarSign, Home, MapPin, Bed, Bath
+  DollarSign, Home, MapPin, Bed
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
@@ -20,7 +20,7 @@ const facilitiesList = [
   { id: 'gym', label: 'Gym Access', icon: Dumbbell },
 ];
 
-const propertyTypes = ['Apartment', 'Villa', 'Studio', 'Penthouse', 'Condo'];
+const propertyTypes = ['Guest House', 'Boys PG', 'Girls PG', 'Serviced Apartment'];
 
 export default function AddProperty() {
   const [selectedFacilities, setSelectedFacilities] = useState<string[]>([]);
@@ -252,19 +252,12 @@ export default function AddProperty() {
                 </div>
 
                 {/* Rooms */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4">
                   <div>
                     <label className="block text-[10px] font-bold uppercase tracking-widest text-charcoal/40 mb-3">Bedrooms</label>
                     <div className="flex items-center bg-bone rounded-xl px-4 py-3">
                       <Bed className="w-4 h-4 text-charcoal/40 mr-3" />
                       <input type="number" value={bedrooms} onChange={(e) => setBedrooms(Number(e.target.value) || 0)} className="w-full bg-transparent text-charcoal font-bold focus:outline-none" defaultValue={1} min={0} />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-widest text-charcoal/40 mb-3">Bathrooms</label>
-                    <div className="flex items-center bg-bone rounded-xl px-4 py-3">
-                      <Bath className="w-4 h-4 text-charcoal/40 mr-3" />
-                      <input type="number" className="w-full bg-transparent text-charcoal font-bold focus:outline-none" defaultValue={1} min={0} />
                     </div>
                   </div>
                 </div>

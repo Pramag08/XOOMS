@@ -35,11 +35,13 @@ def create_property(
         if not owner:
             raise HTTPException(status_code=403, detail="User is not an owner")
 
+        # Ensure non-nullable DB columns are populated even if payload omitted them
+        safe_property_type = payload.property_type if getattr(payload, 'property_type', None) is not None else 'Other'
         prop = Property(
             owner_id=owner.owner_id,
             property_description=payload.property_description,
             room_description=payload.room_description,
-            property_type=payload.property_type,
+            property_type=safe_property_type,
             city=payload.city,
             address=payload.address,
             google_maps_link=payload.google_maps_link,

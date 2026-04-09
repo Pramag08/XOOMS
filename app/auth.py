@@ -95,12 +95,19 @@ def me(current_user: UserAuth = Depends(get_current_user), rental_session: Sessi
     # Include rental DB profile data (customer) when available so frontend can show full name
     from .models import Customer
     cust = rental_session.exec(select(Customer).where(Customer.user_id == current_user.user_id)).first()
+    # If this user has an owner profile, include the owner's verification_status
+    owner_ver_status = None
+    if cust is not None:
+        owner = rental_session.exec(select(Owner).where(Owner.customer_id == cust.customer_id)).first()
+        if owner is not None:
+            owner_ver_status = getattr(owner, 'verification_status', None)
+
     return {
         "user_id": current_user.user_id,
         "email": current_user.email,
         "role": current_user.role,
         "full_name": getattr(cust, 'full_name', None) if cust else None,
-        "verification_status": getattr(cust, 'verification_status', None) if cust else None,
+        "verification_status": owner_ver_status if owner_ver_status is not None else None,
     }
 
 

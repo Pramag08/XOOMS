@@ -344,6 +344,12 @@ def create_booking_for_property(property_id: int, payload: BookingCreate, curren
         if not room or room.property_id != property_id:
             raise HTTPException(status_code=404, detail="Room not found for this property")
 
+        # Enforce property verification at application layer to provide clearer errors
+        # The DB also enforces this via a trigger; check here and return a friendly 403 instead of an InternalError.
+        prop_verif = getattr(prop, 'verification_status', None)
+        if not prop_verif or str(prop_verif).lower() != 'verified':
+            raise HTTPException(status_code=403, detail=f"Cannot book room {payload.room_id}, property is not verified")
+
         # get customer
         from .customers import get_customer_by_user
         cust = get_customer_by_user(session, current_user.user_id)
@@ -393,11 +399,13 @@ def create_booking_for_property(property_id: int, payload: BookingCreate, curren
 
 
 
-@router.post("/{property_id}/reviews", response_model=List[ReviewRead], status_code=status.HTTP_201_CREATED)
+@router.post("/{property_id}/reviews", response_model=ReviewRead, status_code=status.HTTP_201_CREATED)
 def create_review_for_property(property_id: int, payload: ReviewCreate, current_user=Depends(get_current_user), session: Session = Depends(get_rental_session)):
     try:
-        # only customers may post reviews
-        if current_user.role.lower() != 'customer':
+        # only customers (auth role 'User' in auth DB) may post reviews
+        # older code expected role 'customer' but signup stores 'User' for customers — accept either
+        user_role = getattr(current_user, 'role', '') or ''
+        if user_role.lower() not in ('user', 'customer'):
             raise HTTPException(status_code=403, detail="Only customers may post reviews")
 
         # verify property exists
@@ -416,7 +424,16 @@ def create_review_for_property(property_id: int, payload: ReviewCreate, current_
         # ensure customer actually completed a stay at this property
         room_stmt = select(Room.room_id).where(Room.property_id == property_id)
         room_rows = session.exec(room_stmt).all()
-        room_ids = [r for (r,) in room_rows]
+        # `room_rows` may be a list of scalar ints or a list of single-item tuples depending on SQLModel/DB driver.
+        room_ids: list[int] = []
+        for row in room_rows:
+            if isinstance(row, (list, tuple)) and len(row) > 0:
+                room_ids.append(row[0])
+            else:
+                room_ids.append(row)
+
+        # filter out any falsy values
+        room_ids = [r for r in room_ids if r]
         if not room_ids:
             raise HTTPException(status_code=403, detail="Only customers who have stayed may leave reviews")
 
@@ -435,20 +452,24 @@ def create_review_for_property(property_id: int, payload: ReviewCreate, current_
             property_id=property_id,
             customer_id=cust.customer_id,
             rating=payload.rating,
-              review_text=payload.review_text if hasattr(payload, 'review_text') else getattr(payload, 'text', None),
-              review_date=datetime.utcnow(),
+            review_text=payload.review_text if hasattr(payload, 'review_text') else getattr(payload, 'text', None),
+            review_date=datetime.utcnow(),
         )
 
+        # Use explicit add/flush/commit to avoid nested transaction errors on session
         try:
-            with session.begin():
-                session.add(db_review)
-                session.flush()
-
-                # recompute average rating
-                # rating will be updated by DB trigger `update_property_rating`; no manual update required
-                pass
+            session.add(db_review)
+            session.flush()
+            try:
+                session.commit()
+            except IntegrityError as e:
+                session.rollback()
+                logger.exception("IntegrityError creating review: %s", e)
+                raise HTTPException(status_code=400, detail="Could not create review")
         except IntegrityError as e:
-            logger.exception("IntegrityError creating review: %s", e)
+            # handle any integrity issues
+            logger.exception("IntegrityError creating review (outer): %s", e)
+            session.rollback()
             raise HTTPException(status_code=400, detail="Could not create review")
 
         session.refresh(db_review)

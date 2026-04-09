@@ -51,21 +51,32 @@ def admin_list_properties(session: Session = Depends(get_rental_session), curren
 @router.get("/properties/unverified", response_model=List[PropertyRead])
 def admin_list_unverified_properties(session: Session = Depends(get_rental_session), current_user=Depends(require_role("Admin"))):
     try:
-        # return properties that are pending verification
+        # return properties that are pending verification, include owner name/email
         props = session.exec(select(Property).where(Property.verification_status == 'Pending')).all()
-        results = [PropertyRead(
-            property_id=p.property_id,
-            owner_id=p.owner_id,
-            property_description=p.property_description,
-            room_description=p.room_description,
-            property_type=p.property_type,
-            city=p.city,
-            address=p.address,
-            google_maps_link=p.google_maps_link,
-            verification_status=p.verification_status,
-            average_rating=p.average_rating,
-            is_full=False,
-        ) for p in props]
+        results = []
+        for p in props:
+            owner = session.get(Owner, p.owner_id)
+            owner_name = None
+            owner_email = None
+            if owner is not None:
+                cust = session.get(Customer, owner.customer_id)
+                if cust is not None:
+                    owner_name = getattr(cust, 'full_name', None)
+                    owner_email = getattr(cust, 'email', None)
+            results.append({
+                'property_id': p.property_id,
+                'owner_id': p.owner_id,
+                'owner_name': owner_name,
+                'owner_email': owner_email,
+                'property_description': p.property_description,
+                'room_description': p.room_description,
+                'property_type': p.property_type,
+                'city': p.city,
+                'address': p.address,
+                'google_maps_link': p.google_maps_link,
+                'verification_status': p.verification_status,
+                'average_rating': p.average_rating,
+            })
         return results
     except Exception as exc:
         tb = traceback.format_exc()
@@ -122,8 +133,19 @@ def admin_delete_property(property_id: int, session: Session = Depends(get_renta
 @router.get("/owners")
 def admin_list_owners(session: Session = Depends(get_rental_session), current_user=Depends(require_role("Admin"))):
     try:
+        # return owners enriched with linked customer info (name, email)
         rows = session.exec(select(Owner)).all()
-        return rows
+        results = []
+        for o in rows:
+            cust = session.get(Customer, o.customer_id)
+            results.append({
+                "owner_id": o.owner_id,
+                "customer_id": o.customer_id,
+                "name": getattr(cust, "full_name", None) if cust is not None else None,
+                "email": getattr(cust, "email", None) if cust is not None else None,
+                "verification_status": o.verification_status,
+            })
+        return results
     except Exception as exc:
         tb = traceback.format_exc()
         logger.exception("admin_list_owners failed: %s", exc)
@@ -134,7 +156,17 @@ def admin_list_owners(session: Session = Depends(get_rental_session), current_us
 def admin_list_unverified_owners(session: Session = Depends(get_rental_session), current_user=Depends(require_role("Admin"))):
     try:
         owners = session.exec(select(Owner).where(Owner.verification_status == 'Pending')).all()
-        return owners
+        results = []
+        for o in owners:
+            cust = session.get(Customer, o.customer_id)
+            results.append({
+                "owner_id": o.owner_id,
+                "customer_id": o.customer_id,
+                "name": getattr(cust, "full_name", None) if cust is not None else None,
+                "email": getattr(cust, "email", None) if cust is not None else None,
+                "verification_status": o.verification_status,
+            })
+        return results
     except Exception as exc:
         tb = traceback.format_exc()
         logger.exception("admin_list_unverified_owners failed: %s", exc)

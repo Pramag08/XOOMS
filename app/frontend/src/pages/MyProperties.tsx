@@ -128,19 +128,29 @@ export default function MyProperties() {
         const ownerProps: any[] = await apiFetch('/owner/properties').catch(() => []);
         if (!mounted) return;
         // map backend shape to UI shape expected by table
-        const mapped = (ownerProps || []).map((p: any) => ({
-          id: p.property_id ?? `P-${Math.random().toString(36).slice(2,8)}`,
-          name: p.property_description || 'Property',
-          location: p.city || '',
-          type: p.property_type || '',
-          price: p.average_rent ?? 0,
-          status: p.availability_text || (p.is_full ? 'Rented' : 'Active') || (p.verification_status || 'Active'),
-          listedDate: p.next_available || '-',
-          views: 0,
-          rating: p.average_rating ?? 0,
-          reviews: 0,
-          raw: p,
-        }));
+        const mapped = (ownerProps || []).map((p: any) => {
+          const verStatus = p.verification_status ?? p.status ?? null;
+          const verified = !!(
+            (typeof verStatus === 'string' && /verif/i.test(verStatus)) ||
+            p.is_verified === true ||
+            p.verified === true
+          );
+          return ({
+            id: p.property_id ?? `P-${Math.random().toString(36).slice(2,8)}`,
+            name: p.property_description || 'Property',
+            location: p.city || '',
+            type: p.property_type || '',
+            price: p.average_rent ?? 0,
+            status: p.availability_text || (p.is_full ? 'Rented' : 'Active') || (verStatus || 'Active'),
+            listedDate: p.next_available || '-',
+            views: 0,
+            rating: p.average_rating ?? 0,
+            reviews: 0,
+            verification_status: verStatus,
+            verified,
+            raw: p,
+          });
+        });
         setProperties(mapped);
         // fetch owner bookings once and group by property_id
         try {
@@ -182,19 +192,39 @@ export default function MyProperties() {
             <Link to="/dashboard" className="inline-flex items-center gap-2 text-charcoal/40 hover:text-charcoal transition-colors mb-4 text-xs uppercase tracking-widest font-bold">
               <ArrowLeft className="w-4 h-4" /> Back to Dashboard
             </Link>
-            <h1 className="font-serif text-4xl md:text-5xl text-charcoal mb-2">
-              My Properties
-            </h1>
-            <p className="font-sans text-charcoal/60 text-sm">
-              Manage your listed properties, track status, and update details.
-            </p>
+            <div className="flex items-center gap-4">
+              <div>
+                <h1 className="font-serif text-4xl md:text-5xl text-charcoal mb-2">My Properties</h1>
+                <p className="font-sans text-charcoal/60 text-sm">Manage your listed properties, track status, and update details.</p>
+              </div>
+              {/* show owner verification badge when user is owner */}
+              {(user && (user as any).role && String((user as any).role).toLowerCase() === 'owner') ? (
+                ((user as any).verificationStatus && /(verif)/i.test((user as any).verificationStatus)) ? (
+                  <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-green-50 text-green-600 border border-green-100 font-bold text-sm">
+                    <CheckCircle className="w-4 h-4" /> Verified Owner
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-charcoal/5 text-charcoal/60 border border-charcoal/10 font-bold text-sm">
+                    <X className="w-4 h-4" /> Unverified Owner
+                  </span>
+                )
+              ) : null}
+            </div>
           </div>
           
-          <Link to="/my-properties/add">
-            <button className="px-6 py-3 rounded-full bg-charcoal text-white hover:bg-black transition-colors text-xs uppercase tracking-widest font-bold flex items-center gap-2 shadow-lg shadow-charcoal/20">
-              <Plus className="w-4 h-4" /> Add New Property
-            </button>
-          </Link>
+          {(user && (user as any).role && String((user as any).role).toLowerCase() === 'owner') ? (
+            ((user as any).verificationStatus && /(verif)/i.test((user as any).verificationStatus)) ? (
+              <Link to="/my-properties/add">
+                <button className="px-6 py-3 rounded-full bg-charcoal text-white hover:bg-black transition-colors text-xs uppercase tracking-widest font-bold flex items-center gap-2 shadow-lg shadow-charcoal/20">
+                  <Plus className="w-4 h-4" /> Add New Property
+                </button>
+              </Link>
+            ) : (
+              <button title="Your account is not verified to add properties" className="px-6 py-3 rounded-full bg-charcoal/20 text-charcoal/40 transition-colors text-xs uppercase tracking-widest font-bold flex items-center gap-2 shadow-lg shadow-charcoal/10 cursor-not-allowed" disabled>
+                <Plus className="w-4 h-4" /> Add New Property
+              </button>
+            )
+          ) : null}
         </motion.div>
 
         {/* Controls Bar */}
@@ -373,11 +403,16 @@ export default function MyProperties() {
                   <Fragment key={property.id}>
                   <motion.tr 
                     variants={itemVariants}
-                    className="group hover:bg-bone/30 transition-colors border-b border-charcoal/5 last:border-0"
+                    className={`group hover:bg-bone/30 transition-colors border-b border-charcoal/5 last:border-0 ${property.verified ? '' : 'opacity-70 grayscale'}`}
                   >
                     <td className="py-6 px-8">
                       <div>
-                        <h3 className="font-serif text-lg text-charcoal group-hover:text-gold transition-colors">{property.name}</h3>
+                        <div className="flex items-center gap-3">
+                          <h3 className="font-serif text-lg text-charcoal group-hover:text-gold transition-colors">{property.name}</h3>
+                          <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${property.verified ? 'bg-green-50 text-green-600 border border-green-100' : 'bg-charcoal/5 text-charcoal/60 border border-charcoal/10'}`}>
+                            {property.verified ? 'Verified' : 'Unverified'}
+                          </span>
+                        </div>
                         <div className="flex items-center gap-2 text-charcoal/40 mt-1">
                           <MapPin className="w-3 h-3" />
                           <span className="text-xs font-sans">{property.location}</span>
