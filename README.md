@@ -403,9 +403,13 @@ Found a bug or have an idea? We'd love your help!
 
 ## 👤 About
 
-Built by [Vaibhav Sahni](https://github.com/vaibhav-sahni)
+Built by
 
-**XOOMS** - Making premium rentals simple and accessible to everyone worldwide.
+-[Vaibhav Sahni](https://github.com/vaibhav-sahni) 
+-[Siddharth Verma](https://github.com/Siddharthiiitd) 
+-[Pramag Basantia] 
+
+
 
 ---
 
