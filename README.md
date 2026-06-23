@@ -5,7 +5,7 @@ Welcome to **XOOMS** – your gateway to verified, premium rental properties wor
 ![XOOMS](https://img.shields.io/badge/XOOMS-Premium%20Rentals-brightgreen)
 ![Status](https://img.shields.io/badge/Status-Active-blue)
 
-## 📸 Platform Overview
+## Project Overview
 
 XOOMS is a comprehensive property rental platform designed for both property owners and renters. Whether you're looking to book your next premium stay or manage a global property portfolio, XOOMS makes it simple, secure, and enjoyable.
 
@@ -13,7 +13,7 @@ XOOMS is a comprehensive property rental platform designed for both property own
 
 ---
 
-## 🎯 What is XOOMS?
+## What is XOOMS?
 
 XOOMS is a modern web application that connects property owners with renters seeking verified, premium accommodations. The platform handles everything from property listing and verification to booking and payment – all in one place.
 
@@ -40,7 +40,7 @@ XOOMS is a modern web application that connects property owners with renters see
 
 ---
 
-## 🏗 How the Platform Works
+## How the Platform Works
 
 ### For Property Owners
 
@@ -136,7 +136,7 @@ XOOMS is a modern web application that connects property owners with renters see
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### What You Need
 
@@ -192,7 +192,7 @@ createdb auth_db
 
 ---
 
-## 🏃 Running the Application
+## Running the Application
 
 ### Start the Backend
 
@@ -329,7 +329,7 @@ staymadesimple/
 
 ---
 
-## 💡 Common Tasks
+## Common Tasks
 
 ### How to Add a New Property (As Owner)
 
@@ -370,7 +370,7 @@ staymadesimple/
 
 ---
 
-## 🎨 Technology Stack (Brief Overview)
+## Technology Stack (Brief Overview)
 
 **Frontend:** React with TypeScript for the user interface  
 **Backend:** FastAPI for reliable APIs  
@@ -393,23 +393,13 @@ Found a bug or have an idea? We'd love your help!
 
 ---
 
-## 📞 Questions or Issues?
-
-- Open an [Issue](https://github.com/vaibhav-sahni/staymadesimple/issues) on GitHub
-- Check out existing [Discussions](https://github.com/vaibhav-sahni/staymadesimple/discussions)
-- Review [API Documentation](http://localhost:8000/docs)
-
----
-
-## 👤 About
+## 👤 Authors
 
 Built by
 
 -[Vaibhav Sahni](https://github.com/vaibhav-sahni) 
 -[Siddharth Verma](https://github.com/Siddharthiiitd) 
 -[Pramag Basantia](https://github.com/Pramag08)
-
-
 
 ---
 
