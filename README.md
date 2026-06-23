@@ -1,4 +1,4 @@
-# 🏠 XOOMS - Premium Property Rental Platform
+# XOOMS - Premium Property Rental Platform
 
 Welcome to **XOOMS** – your gateway to verified, premium rental properties worldwide. We're bridging the gap between premium rental expectations and reality by offering verified living standards with seamless property management and booking experiences.
 
