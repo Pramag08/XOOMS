@@ -1,13 +1,23 @@
 # XOOMS - Premium Property Rental Platform
 
-Welcome to **XOOMS** – your gateway to verified, premium rental properties worldwide. We're bridging the gap between premium rental expectations and reality by offering verified living standards with seamless property management and booking experiences.
+Welcome to **XOOMS** – your gateway to verified, premium rental properties worldwide. We're bridging the gap between premium rental expectations and reality by offering verified living standards [...]
 
 ![XOOMS](https://img.shields.io/badge/XOOMS-Premium%20Rentals-brightgreen)
 ![Status](https://img.shields.io/badge/Status-Active-blue)
 
+<div align="center">
+
+![Hero Image](readme_assets/xoom1.png)
+
+| ![Screenshot 1](readme_assets/xoom1.png) | ![Screenshot 2](readme_assets/xoom2.png) |
+|:---:|:---:|
+| ![Screenshot 3](readme_assets/xoom3.png) | ![Screenshot 4](readme_assets/xoom4.png) |
+
+</div>
+
 ## Project Overview
 
-XOOMS is a comprehensive property rental platform designed for both property owners and renters. Whether you're looking to book your next premium stay or manage a global property portfolio, XOOMS makes it simple, secure, and enjoyable.
+XOOMS is a comprehensive property rental platform designed for both property owners and renters. Whether you're looking to book your next premium stay or manage a global property portfolio, XOOMS [...]
 
 **Verified Living Standards** • **Global Properties** • **Secure Transactions** • **Easy Management**
 
@@ -15,7 +25,7 @@ XOOMS is a comprehensive property rental platform designed for both property own
 
 ## What is XOOMS?
 
-XOOMS is a modern web application that connects property owners with renters seeking verified, premium accommodations. The platform handles everything from property listing and verification to booking and payment – all in one place.
+XOOMS is a modern web application that connects property owners with renters seeking verified, premium accommodations. The platform handles everything from property listing and verification to boo[...]
 
 ### For Property Owners
 - **Showcase Your Properties**: Upload beautiful photos and detailed descriptions of your properties
