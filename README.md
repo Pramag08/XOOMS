@@ -5,12 +5,13 @@ Welcome to **XOOMS** – your gateway to verified, premium rental properties wor
 ![XOOMS](https://img.shields.io/badge/XOOMS-Premium%20Rentals-brightgreen)
 ![Status](https://img.shields.io/badge/Status-Active-blue)
 
-<!-- Project screenshots (placeholders). Add your actual images to `assets/screenshots/1.png` .. `4.png` to have them appear on GitHub. -->
 <div align="center">
 
-| ![Screenshot 1](assets/screenshots/1.png) | ![Screenshot 2](assets/screenshots/2.png) |
+![Hero Image](readme_assets/xoom1.png)
+
+| ![Screenshot 1](readme_assets/xoom1.png) | ![Screenshot 2](readme_assets/xoom2.png) |
 |:---:|:---:|
-| ![Screenshot 3](assets/screenshots/3.png) | ![Screenshot 4](assets/screenshots/4.png) |
+| ![Screenshot 3](readme_assets/xoom3.png) | ![Screenshot 4](readme_assets/xoom4.png) |
 
 </div>
 
