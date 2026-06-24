@@ -7,8 +7,6 @@ Welcome to **XOOMS** – your gateway to verified, premium rental properties wor
 
 <div align="center">
 
-![Hero Image](readme_assets/xoom1.png)
-
 | ![Screenshot 1](readme_assets/xoom1.png) | ![Screenshot 2](readme_assets/xoom2.png) |
 |:---:|:---:|
 | ![Screenshot 3](readme_assets/xoom3.png) | ![Screenshot 4](readme_assets/xoom4.png) |
